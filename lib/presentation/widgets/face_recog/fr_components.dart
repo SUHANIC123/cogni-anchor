@@ -1,10 +1,26 @@
 import 'package:cogni_anchor/presentation/constants/colors.dart' as colors;
+import 'package:cogni_anchor/presentation/screens/face_recog/fr_add_person_page.dart';
 import 'package:cogni_anchor/presentation/widgets/common/app_text.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:gap/gap.dart';
 
-// 1. The Main Orange Button
+class RecognizedPerson {
+  final String name;
+  final String relationship;
+  final String occupation; // NEW FIELD
+  final String age;        // NEW FIELD
+  final String notes;      // NEW FIELD
+
+  const RecognizedPerson({
+    required this.name,
+    required this.relationship,
+    required this.occupation, // UPDATED
+    required this.age,        // UPDATED
+    required this.notes,      // UPDATED
+  });
+}
+
 class FRMainButton extends StatelessWidget {
   final String label;
   final VoidCallback onTap;
@@ -29,7 +45,6 @@ class FRMainButton extends StatelessWidget {
   }
 }
 
-// 2. The "How it works" Card (Screen 1)
 class FRHowItWorksCard extends StatelessWidget {
   const FRHowItWorksCard({super.key});
 
@@ -89,9 +104,10 @@ class FRHowItWorksCard extends StatelessWidget {
   }
 }
 
-// 3. Detailed Person Card (Screen 3)
 class FRPersonCard extends StatelessWidget {
-  const FRPersonCard({super.key});
+  final RecognizedPerson person;
+
+  const FRPersonCard({super.key, required this.person});
 
   @override
   Widget build(BuildContext context) {
@@ -106,7 +122,7 @@ class FRPersonCard extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          AppText("Akhilesh Bhute", fontSize: 20.sp, fontWeight: FontWeight.w700),
+          AppText(person.name, fontSize: 20.sp, fontWeight: FontWeight.w700),
           Gap(8.h),
           Container(
             padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 4.h),
@@ -121,10 +137,10 @@ class FRPersonCard extends StatelessWidget {
             ),
           ),
           Gap(20.h),
-          _infoRow(Icons.favorite_border, "Relationship", "Father"),
-          _infoRow(Icons.work_outline, "Occupation", "Retired Teacher"),
-          _infoRow(Icons.calendar_today_outlined, "Age", "68 years old"),
-          _infoRow(Icons.edit_note, "Notes", "Loves gardening and enjoys playing chess on weekends."),
+          _infoRow(Icons.favorite_border, "Relationship", person.relationship),
+          _infoRow(Icons.work_outline, "Occupation", person.occupation), // NEW DISPLAY
+          _infoRow(Icons.calendar_today_outlined, "Age", person.age),      // NEW DISPLAY
+          _infoRow(Icons.edit_note, "Notes", person.notes),            // NEW DISPLAY
           Gap(20.h),
           FRMainButton(label: "OK", onTap: () => Navigator.pop(context)),
         ],
@@ -155,7 +171,6 @@ class FRPersonCard extends StatelessWidget {
   }
 }
 
-// 4. Not Found Card (Screen 4)
 class FRNotFoundCard extends StatelessWidget {
   const FRNotFoundCard({super.key});
 
@@ -183,7 +198,12 @@ class FRNotFoundCard extends StatelessWidget {
             ],
           ),
           Gap(30.h),
-          FRMainButton(label: "Add to Database", onTap: () {}),
+          FRMainButton(
+            label: "Add to Database",
+            onTap: () {
+              Navigator.push(context, MaterialPageRoute(builder: (_) => const FRAddPersonPage()));
+            },
+          ),
           Gap(12.h),
           GestureDetector(
             onTap: () => Navigator.pop(context),

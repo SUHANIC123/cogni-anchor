@@ -1,8 +1,13 @@
+import 'package:camera/camera.dart';
 import 'package:cogni_anchor/presentation/main_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 
-void main() {
+late List<CameraDescription> cameras;
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  cameras = await availableCameras();
   runApp(const CogniAnchor());
 }
 

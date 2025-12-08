@@ -3,22 +3,21 @@ import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 
 class FRResultFoundPage extends StatelessWidget {
-  const FRResultFoundPage({super.key});
+  final RecognizedPerson person;
+
+  const FRResultFoundPage({super.key, required this.person});
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: Stack(
         children: [
-          // 1. Background Image (Blurred)
           Container(
             width: double.infinity,
             height: double.infinity,
-            color: Colors.grey.shade300, // Placeholder for actual image
-            // Use Image.file or Image.asset here with BackDropFilter for blur
+            color: Colors.grey.shade300,
           ),
 
-          // 2. Top Banner
           Positioned(
             top: 60.h,
             left: 20.w,
@@ -38,10 +37,9 @@ class FRResultFoundPage extends StatelessWidget {
             ),
           ),
 
-          // 3. The Card
-          const Align(
+          Align(
             alignment: Alignment.center,
-            child: FRPersonCard(),
+            child: FRPersonCard(person: person),
           ),
         ],
       ),
