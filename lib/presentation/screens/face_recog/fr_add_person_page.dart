@@ -1,19 +1,17 @@
-import 'dart:convert';
-import 'dart:developer';
+import 'dart:io';
 import 'package:camera/camera.dart';
-import 'package:cogni_anchor/main.dart';
+import 'package:cogni_anchor/bloc/face_recog/face_recog_bloc.dart';
+// Removed unused import: import 'package:cogni_anchor/main.dart';
 import 'package:cogni_anchor/presentation/constants/colors.dart' as colors;
 import 'package:cogni_anchor/presentation/widgets/common/app_text.dart';
-import 'package:cogni_anchor/presentation/widgets/face_recog/fr_components.dart'; // For FRMainButton
+import 'package:cogni_anchor/presentation/widgets/face_recog/fr_components.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:gap/gap.dart';
-import 'package:http/http.dart' as http;
-import 'dart:io';
 
 class FRAddPersonPage extends StatefulWidget {
   final File? initialImageFile;
-
   const FRAddPersonPage({super.key, this.initialImageFile});
 
   @override
@@ -21,18 +19,15 @@ class FRAddPersonPage extends StatefulWidget {
 }
 
 class _FRAddPersonPageState extends State<FRAddPersonPage> {
-  static const String _baseUrl = 'https://eaa9e7cf9c64.ngrok-free.app/api/v1/faces/enroll';
-
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _relationshipController = TextEditingController();
-  final TextEditingController _occupationController = TextEditingController(); // NEW CONTROLLER
-  final TextEditingController _ageController = TextEditingController();        // NEW CONTROLLER
-  final TextEditingController _notesController = TextEditingController();      // NEW CONTROLLER
+  final TextEditingController _occupationController = TextEditingController();
+  final TextEditingController _ageController = TextEditingController();
+  final TextEditingController _notesController = TextEditingController();
 
   late CameraController _cameraController;
   bool _isCameraInitialized = false;
   File? _capturedImage;
-  bool _isSaving = false;
 
   @override
   void initState() {
@@ -44,7 +39,14 @@ class _FRAddPersonPageState extends State<FRAddPersonPage> {
   }
 
   Future<void> _initializeCamera() async {
-    final frontCamera = cameras.firstWhere((camera) => camera.lensDirection == CameraLensDirection.front, orElse: () => cameras.first);
+    // FIX: Renamed local variable to 'camerasList' and ensure await is used.
+    final List<CameraDescription> camerasList = await availableCameras();
+
+    // Find the front camera or fallback to the first camera
+    final frontCamera = camerasList.firstWhere(
+      (camera) => camera.lensDirection == CameraLensDirection.front,
+      orElse: () => camerasList.first
+    );
 
     _cameraController = CameraController(frontCamera, ResolutionPreset.medium, enableAudio: false);
 
@@ -61,6 +63,7 @@ class _FRAddPersonPageState extends State<FRAddPersonPage> {
   }
 
   Future<void> _captureImage() async {
+    // If an image exists, treat the tap as a Recapture (clear the current image)
     if (_capturedImage != null) {
       setState(() => _capturedImage = null);
       return;
@@ -78,48 +81,27 @@ class _FRAddPersonPageState extends State<FRAddPersonPage> {
     }
   }
 
-  Future<void> _enrollPerson() async {
+  void _enrollPerson() {
     if (_nameController.text.isEmpty || _relationshipController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Name and Relationship are required.")));
       return;
     }
-
     if (_capturedImage == null) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("A face image must be captured.")));
       return;
     }
 
-    setState(() => _isSaving = true);
-
-    try {
-      var request = http.MultipartRequest('POST', Uri.parse(_baseUrl));
-
-      request.fields['name'] = _nameController.text;
-      request.fields['relationship'] = _relationshipController.text;
-      request.fields['occupation'] = _occupationController.text; // NEW FIELD
-      request.fields['age'] = _ageController.text;             // NEW FIELD
-      request.fields['notes'] = _notesController.text;         // NEW FIELD
-
-      request.files.add(await http.MultipartFile.fromPath('file', _capturedImage!.path));
-
-      final streamedResponse = await request.send();
-      final response = await http.Response.fromStream(streamedResponse);
-
-      if (response.statusCode == 200) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("${_nameController.text} enrolled successfully!")));
-        Navigator.pop(context);
-      } else {
-        final errorDetail = response.body.contains("detail") ? (jsonDecode(response.body)['detail'] ?? "Unknown error") : "Failed to enroll person.";
-        log("$errorDetail", name: "Error fr_add_person_page.dart");
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Enrollment failed: $errorDetail")));
-      }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Network error: Could not connect to server.")));
-    } finally {
-      if (mounted) {
-        setState(() => _isSaving = false);
-      }
-    }
+    // Dispatch EnrollPerson event (BLoC connection preserved)
+    context.read<FaceRecogBloc>().add(
+      EnrollPerson(
+        name: _nameController.text,
+        relationship: _relationshipController.text,
+        occupation: _occupationController.text,
+        age: _ageController.text,
+        notes: _notesController.text,
+        imageFile: _capturedImage!,
+      ),
+    );
   }
 
   @override
@@ -129,49 +111,10 @@ class _FRAddPersonPageState extends State<FRAddPersonPage> {
     }
     _nameController.dispose();
     _relationshipController.dispose();
-    _occupationController.dispose(); // DISPOSE NEW CONTROLLER
-    _ageController.dispose();        // DISPOSE NEW CONTROLLER
-    _notesController.dispose();      // DISPOSE NEW CONTROLLER
+    _occupationController.dispose();
+    _ageController.dispose();
+    _notesController.dispose();
     super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: AppText("Add New Person", color: colors.appColor, fontWeight: FontWeight.w600, fontSize: 18.sp),
-        backgroundColor: Colors.white,
-        elevation: 0,
-        iconTheme: IconThemeData(color: colors.appColor),
-      ),
-      body: SingleChildScrollView(
-        padding: EdgeInsets.all(20.w),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildImageCaptureSection(),
-
-            Gap(25.h),
-
-            AppText("Person Details", fontSize: 16.sp, fontWeight: FontWeight.w600),
-            Gap(15.h),
-            _buildTextField("Full Name", _nameController),
-            Gap(15.h),
-            _buildTextField("Relationship (e.g., Father, Neighbor)", _relationshipController),
-            Gap(15.h),
-            _buildTextField("Occupation", _occupationController), // NEW FIELD
-            Gap(15.h),
-            _buildTextField("Age", _ageController),              // NEW FIELD
-            Gap(15.h),
-            _buildTextField("Notes", _notesController, maxLines: 3), // NEW FIELD
-
-            Gap(40.h),
-
-            _isSaving ? const Center(child: CircularProgressIndicator()) : FRMainButton(label: "Save and Enroll", onTap: _enrollPerson),
-          ],
-        ),
-      ),
-    );
   }
 
   Widget _buildTextField(String hint, TextEditingController controller, {int maxLines = 1}) {
@@ -236,6 +179,60 @@ class _FRAddPersonPageState extends State<FRAddPersonPage> {
           ),
         ),
       ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return BlocConsumer<FaceRecogBloc, FaceRecogState>(
+      listener: (context, state) {
+        if (state is EnrollmentSuccess) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("${state.name} enrolled!")));
+          Navigator.pop(context);
+        } else if (state is EnrollmentError) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(state.message)));
+        }
+      },
+      builder: (context, state) {
+        bool isLoading = state is FaceRecogLoading;
+
+        return Scaffold(
+          appBar: AppBar(
+            title: AppText("Add New Person", color: colors.appColor, fontWeight: FontWeight.w600, fontSize: 18.sp),
+            backgroundColor: Colors.white,
+            elevation: 0,
+            iconTheme: IconThemeData(color: colors.appColor),
+          ),
+          body: SingleChildScrollView(
+            padding: EdgeInsets.all(20.w),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildImageCaptureSection(),
+                Gap(25.h),
+
+                AppText("Person Details", fontSize: 16.sp, fontWeight: FontWeight.w600),
+                Gap(15.h),
+
+                _buildTextField("Full Name", _nameController),
+                Gap(15.h),
+                _buildTextField("Relationship (e.g., Father, Neighbor)", _relationshipController),
+                Gap(15.h),
+                _buildTextField("Occupation", _occupationController),
+                Gap(15.h),
+                _buildTextField("Age", _ageController),
+                Gap(15.h),
+                _buildTextField("Notes", _notesController, maxLines: 3),
+
+                Gap(40.h),
+
+                // Button tied to BLoC loading state
+                isLoading ? const Center(child: CircularProgressIndicator()) : FRMainButton(label: "Save and Enroll", onTap: _enrollPerson),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }

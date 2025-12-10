@@ -1,13 +1,13 @@
 import 'package:camera/camera.dart';
-import 'package:cogni_anchor/presentation/main_screen.dart';
+import 'package:cogni_anchor/bloc/face_recog/face_recog_bloc.dart'; // NEW
+import 'package:cogni_anchor/bloc/reminder/reminder_bloc.dart';     // NEW
+import 'package:cogni_anchor/presentation/screens/user_selection_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
-
-late List<CameraDescription> cameras;
+import 'package:flutter_bloc/flutter_bloc.dart'; // NEW
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  cameras = await availableCameras();
   runApp(const CogniAnchor());
 }
 
@@ -16,9 +16,23 @@ class CogniAnchor extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ScreenUtilInit(
-      designSize: Size(390, 844),
-      child: const MaterialApp(debugShowCheckedModeBanner: false, home: MainScreen()),
+    // 1. Wrap the app with MultiBlocProvider
+    return MultiBlocProvider(
+      providers: [
+        BlocProvider<ReminderBloc>(
+          create: (context) => ReminderBloc(),
+        ),
+        BlocProvider<FaceRecogBloc>(
+          create: (context) => FaceRecogBloc(),
+        ),
+      ],
+      child: ScreenUtilInit(
+        designSize: Size(390, 844),
+        child: const MaterialApp(
+          debugShowCheckedModeBanner: false, 
+          home: UserSelectionPage()
+        ),
+      ),
     );
   }
 }
