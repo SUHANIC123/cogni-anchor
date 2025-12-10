@@ -1,0 +1,1 @@
+enum UserModel { patient, caretaker }
