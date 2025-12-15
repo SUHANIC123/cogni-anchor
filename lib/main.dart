@@ -1,13 +1,18 @@
 import 'package:camera/camera.dart';
-import 'package:cogni_anchor/bloc/face_recog/face_recog_bloc.dart'; // NEW
-import 'package:cogni_anchor/bloc/reminder/reminder_bloc.dart';     // NEW
+import 'package:cogni_anchor/data/notification_service.dart'; // NEW IMPORT
+import 'package:cogni_anchor/logic/face_recog/face_recog_bloc.dart';
+import 'package:cogni_anchor/logic/reminder/reminder_bloc.dart';
 import 'package:cogni_anchor/presentation/screens/user_selection_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
-import 'package:flutter_bloc/flutter_bloc.dart'; // NEW
+import 'package:flutter_bloc/flutter_bloc.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  
+  // Initialize Notification Service
+  await NotificationService().init();
+
   runApp(const CogniAnchor());
 }
 
@@ -16,7 +21,6 @@ class CogniAnchor extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // 1. Wrap the app with MultiBlocProvider
     return MultiBlocProvider(
       providers: [
         BlocProvider<ReminderBloc>(
@@ -27,7 +31,7 @@ class CogniAnchor extends StatelessWidget {
         ),
       ],
       child: ScreenUtilInit(
-        designSize: Size(390, 844),
+        designSize: const Size(390, 844),
         child: const MaterialApp(
           debugShowCheckedModeBanner: false, 
           home: UserSelectionPage()

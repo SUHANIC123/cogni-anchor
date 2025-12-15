@@ -1,4 +1,4 @@
-import 'package:cogni_anchor/bloc/reminder/reminder_bloc.dart'; // NEW
+import 'package:cogni_anchor/logic/reminder/reminder_bloc.dart'; // NEW
 import 'package:cogni_anchor/data/models/reminder_model.dart';
 import 'package:cogni_anchor/presentation/constants/colors.dart' as colors;
 import 'package:cogni_anchor/presentation/screens/add_reminder_page.dart';

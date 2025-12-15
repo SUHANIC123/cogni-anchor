@@ -1,6 +1,6 @@
 import 'dart:io';
 import 'package:camera/camera.dart';
-import 'package:cogni_anchor/bloc/face_recog/face_recog_bloc.dart';
+import 'package:cogni_anchor/logic/face_recog/face_recog_bloc.dart';
 // Removed unused import: import 'package:cogni_anchor/main.dart';
 import 'package:cogni_anchor/presentation/constants/colors.dart' as colors;
 import 'package:cogni_anchor/presentation/widgets/common/app_text.dart';

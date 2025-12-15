@@ -12,11 +12,11 @@ class BaseHttpService {
   static const bool isProd = true; 
   
   // 2. Local Port and API Path
-  static const String _localPort = '9001';
+  static const String _localPort = '8001';
   static const String _apiPath = '/api/v1';
 
   // 3. Production URL (Replace this with your actual ngrok URL when deploying)
-  static const String _ngrokUrl = 'https://a0c7a6669e88.ngrok-free.app';
+  static const String _ngrokUrl = 'https://79bfcb8a41fe.ngrok-free.app';
   
   // --- BASE URL RESOLVER ---
   
