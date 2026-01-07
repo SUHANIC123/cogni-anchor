@@ -3,12 +3,16 @@ import 'package:http/http.dart' as http;
 import 'package:cogni_anchor/data/config/api_config.dart';
 
 class ChatbotService {
+  /// Send text message to the LangGraph Agent
+  /// Requires [pairId] to enable agent tools (reminders, alerts)
   static Future<String> sendTextMessage({
     required String patientId,
+    required String pairId,
     required String message,
   }) async {
     try {
-      final url = Uri.parse('${ApiConfig.baseUrl}/api/v1/chat/message');
+      // Pointing to the new Agent endpoint
+      final url = Uri.parse('${ApiConfig.baseUrl}/api/v1/agent/chat');
 
       final response = await http
           .post(
@@ -16,8 +20,8 @@ class ChatbotService {
             headers: {'Content-Type': 'application/json'},
             body: jsonEncode({
               'patient_id': patientId,
+              'pair_id': pairId, // Required for agent logic
               'message': message,
-              'mode': 'text',
             }),
           )
           .timeout(const Duration(seconds: 30));

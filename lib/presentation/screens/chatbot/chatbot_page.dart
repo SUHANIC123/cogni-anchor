@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'dart:io';
+import 'package:cogni_anchor/data/config/api_config.dart';
 import 'package:cogni_anchor/data/services/chatbot_service.dart';
 import 'package:cogni_anchor/presentation/constants/theme_constants.dart';
 import 'package:flutter/material.dart';
@@ -22,32 +24,49 @@ class _ChatbotPageState extends State<ChatbotPage> {
   final List<ChatMessage> _messages = [];
   bool _isLoading = false;
 
+  // --- Audio Recorder & Player ---
   final FlutterSoundRecorder _audioRecorder = FlutterSoundRecorder();
+  final FlutterSoundPlayer _audioPlayer = FlutterSoundPlayer();
+  
   bool _isRecording = false;
   bool _recorderInitialized = false;
+  bool _playerInitialized = false;
+  bool _isPlaying = false;
+
+  // Recording State Flags
+  bool _isRecorderReady = false; 
   String? _recordingPath;
 
-  String get patientId =>
-      Supabase.instance.client.auth.currentUser?.id ?? "demo_patient";
+  String? _pairId;
+
+  String get patientId => Supabase.instance.client.auth.currentUser?.id ?? "demo_patient";
 
   @override
   void initState() {
     super.initState();
-    _initRecorder();
+    _initAudio();
+    _fetchPairId();
     _messages.add(ChatMessage(
-      text:
-          "Hi! I'm your cognitive health companion. How can I help you today?",
+      text: "Hi! I'm your cognitive health companion. How can I help you today?",
       isBot: true,
       timestamp: DateTime.now(),
     ));
   }
 
-  Future<void> _initRecorder() async {
+  Future<void> _initAudio() async {
     try {
       await _audioRecorder.openRecorder();
       _recorderInitialized = true;
+
+      await _audioPlayer.openPlayer();
+      _playerInitialized = true;
+      
+      // Set subscription duration for smoother UI updates if needed
+      await _audioPlayer.setSubscriptionDuration(const Duration(milliseconds: 100));
+
+      setState(() {});
     } catch (e) {
-      debugPrint('Failed to initialize recorder: $e');
+      debugPrint('Failed to initialize audio session: $e');
     }
   }
 
@@ -56,7 +75,29 @@ class _ChatbotPageState extends State<ChatbotPage> {
     _messageController.dispose();
     _scrollController.dispose();
     if (_recorderInitialized) _audioRecorder.closeRecorder();
+    if (_playerInitialized) _audioPlayer.closePlayer();
     super.dispose();
+  }
+
+  Future<void> _fetchPairId() async {
+    try {
+      final client = Supabase.instance.client;
+      final userId = client.auth.currentUser?.id;
+      if (userId == null) return;
+
+      final patientData = await client.from('pairs').select('id').eq('patient_user_id', userId).maybeSingle();
+      if (patientData != null) {
+        setState(() => _pairId = patientData['id'].toString());
+        return;
+      }
+
+      final caretakerData = await client.from('pairs').select('id').eq('caretaker_user_id', userId).maybeSingle();
+      if (caretakerData != null) {
+        setState(() => _pairId = caretakerData['id'].toString());
+      }
+    } catch (e) {
+      debugPrint("Error fetching pair ID: $e");
+    }
   }
 
   void _scrollToBottom() {
@@ -74,9 +115,11 @@ class _ChatbotPageState extends State<ChatbotPage> {
   Future<void> _sendMessage(String message) async {
     if (message.trim().isEmpty) return;
 
+    // Stop audio if playing before sending text
+    if (_isPlaying) await _stopPlayback();
+
     setState(() {
-      _messages.add(
-          ChatMessage(text: message, isBot: false, timestamp: DateTime.now()));
+      _messages.add(ChatMessage(text: message, isBot: false, timestamp: DateTime.now()));
       _isLoading = true;
     });
 
@@ -84,14 +127,15 @@ class _ChatbotPageState extends State<ChatbotPage> {
     _scrollToBottom();
 
     try {
+      final currentPairId = _pairId ?? "demo_pair_001";
       final response = await ChatbotService.sendTextMessage(
         patientId: patientId,
+        pairId: currentPairId,
         message: message,
       );
 
       setState(() {
-        _messages.add(ChatMessage(
-            text: response, isBot: true, timestamp: DateTime.now()));
+        _messages.add(ChatMessage(text: response, isBot: true, timestamp: DateTime.now()));
         _isLoading = false;
       });
       _scrollToBottom();
@@ -113,57 +157,109 @@ class _ChatbotPageState extends State<ChatbotPage> {
     _scrollToBottom();
   }
 
+  // --- RECORDING LOGIC (Fixed) ---
+
   Future<void> _startRecording() async {
+    if (!_recorderInitialized) return;
+
+    // 1. Stop playback if user starts recording
+    if (_isPlaying) await _stopPlayback();
+
+    // 2. Reset flags IMMEDIATELY to prevent race conditions
+    // This ensures _stopRecording knows we are starting a NEW session
+    setState(() {
+      _isRecording = true;
+      _isRecorderReady = false; 
+      _recordingPath = null; // Clear old path so we don't send previous audio
+    });
+
     try {
       final status = await Permission.microphone.request();
-      if (!status.isGranted) return;
+      if (!status.isGranted) {
+        setState(() => _isRecording = false);
+        return;
+      }
 
       final Directory appDocDir = await getApplicationDocumentsDirectory();
-      final String filePath =
-          '${appDocDir.path}/recording_${DateTime.now().millisecondsSinceEpoch}.aac';
+      // Generate a unique filename
+      final String filePath = '${appDocDir.path}/recording_${DateTime.now().millisecondsSinceEpoch}.aac';
 
-      await _audioRecorder.startRecorder(
-          toFile: filePath, codec: Codec.aacADTS);
+      // Update path
       setState(() {
-        _isRecording = true;
         _recordingPath = filePath;
       });
+
+      // Start actual recording
+      await _audioRecorder.startRecorder(toFile: filePath, codec: Codec.aacADTS);
+      
+      // Mark ready
+      _isRecorderReady = true; 
+      
     } catch (e) {
       debugPrint("Recording error: $e");
+      setState(() => _isRecording = false);
     }
   }
 
   Future<void> _stopRecording() async {
     try {
+      // 3. Smart Wait: If user tapped too fast, wait for initialization to finish
+      // We loop briefly instead of a single delay for better responsiveness
+      for (int i = 0; i < 10; i++) {
+        if (_isRecorderReady) break;
+        await Future.delayed(const Duration(milliseconds: 100));
+      }
+
+      // If still not ready or no path, abort (don't send old or null file)
+      if (!_isRecorderReady || _recordingPath == null) {
+        debugPrint("Recorder failed to initialize in time or was cancelled.");
+        await _audioRecorder.stopRecorder();
+        setState(() => _isRecording = false);
+        return;
+      }
+
+      // Stop recorder
       await _audioRecorder.stopRecorder();
       setState(() => _isRecording = false);
-      if (_recordingPath != null) _sendVoiceMessage(_recordingPath!);
+
+      // Verify file
+      final file = File(_recordingPath!);
+      if (await file.exists()) {
+        final int size = await file.length();
+        if (size > 500) { 
+           _sendVoiceMessage(_recordingPath!);
+        } else {
+          debugPrint("Audio file too small ($size bytes). Ignoring.");
+        }
+      }
     } catch (e) {
+      debugPrint("Stop recording error: $e");
       setState(() => _isRecording = false);
     }
   }
 
   Future<void> _sendVoiceMessage(String audioPath) async {
     setState(() {
-      _messages.add(ChatMessage(
-          text: " Voice message sent",
-          isBot: false,
-          timestamp: DateTime.now()));
+      _messages.add(ChatMessage(text: "🔊 Voice message sent...", isBot: false, timestamp: DateTime.now()));
       _isLoading = true;
     });
     _scrollToBottom();
 
     try {
       final audioBytes = await File(audioPath).readAsBytes();
+      if (audioBytes.isEmpty) throw Exception("Audio file is empty");
+
       final response = await ChatbotService.sendVoiceMessage(
         patientId: patientId,
         audioBytes: audioBytes,
         filename: 'voice_message.aac',
       );
 
+      final audioUrl = response['audio_url'];
+
       setState(() {
         _messages[_messages.length - 1] = ChatMessage(
-          text: " ${response['transcription']}",
+          text: "🎤 ${response['transcription']}",
           isBot: false,
           timestamp: DateTime.now(),
         );
@@ -175,9 +271,45 @@ class _ChatbotPageState extends State<ChatbotPage> {
         _isLoading = false;
       });
       _scrollToBottom();
+
+      // Play the response audio
+      if (audioUrl != null && _playerInitialized) {
+        _playResponseAudio(audioUrl);
+      }
+
     } catch (e) {
       _handleError(e);
     }
+  }
+
+  // --- PLAYBACK LOGIC ---
+
+  Future<void> _playResponseAudio(String relativeUrl) async {
+    try {
+      // Stop any existing playback first
+      await _audioPlayer.stopPlayer();
+
+      final fullUrl = "${ApiConfig.baseUrl}$relativeUrl";
+      debugPrint("Playing audio from: $fullUrl");
+
+      setState(() => _isPlaying = true);
+
+      // Start player
+      await _audioPlayer.startPlayer(
+        fromURI: fullUrl,
+        whenFinished: () {
+          setState(() => _isPlaying = false);
+        },
+      );
+    } catch (e) {
+      debugPrint("Audio playback error: $e");
+      setState(() => _isPlaying = false);
+    }
+  }
+
+  Future<void> _stopPlayback() async {
+    await _audioPlayer.stopPlayer();
+    setState(() => _isPlaying = false);
   }
 
   @override
@@ -195,15 +327,10 @@ class _ChatbotPageState extends State<ChatbotPage> {
           children: [
             CircleAvatar(
               backgroundColor: Colors.white24,
-              child: Icon(Icons.smart_toy_outlined,
-                  color: Colors.white, size: 20.sp),
+              child: Icon(Icons.smart_toy_outlined, color: Colors.white, size: 20.sp),
             ),
             Gap(10.w),
-            Text("AI Companion",
-                style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 18.sp,
-                    fontWeight: FontWeight.w600)),
+            Text("AI Companion", style: TextStyle(color: Colors.white, fontSize: 18.sp, fontWeight: FontWeight.w600)),
           ],
         ),
         centerTitle: true,
@@ -223,6 +350,27 @@ class _ChatbotPageState extends State<ChatbotPage> {
               },
             ),
           ),
+          
+          // Audio Playback Indicator
+          if (_isPlaying)
+            Container(
+              color: AppColors.primaryLight,
+              padding: EdgeInsets.symmetric(vertical: 4.h),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.volume_up, size: 16.sp, color: AppColors.primary),
+                  Gap(8.w),
+                  Text("Speaking...", style: TextStyle(color: AppColors.primary, fontSize: 12.sp, fontWeight: FontWeight.w600)),
+                  Gap(16.w),
+                  GestureDetector(
+                    onTap: _stopPlayback,
+                    child: Icon(Icons.stop_circle_outlined, size: 20.sp, color: Colors.red),
+                  )
+                ],
+              ),
+            ),
+            
           _buildInputArea(),
         ],
       ),
@@ -234,8 +382,7 @@ class _ChatbotPageState extends State<ChatbotPage> {
     return Align(
       alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
-        margin: EdgeInsets.only(
-            bottom: 12.h, left: isMe ? 50.w : 0, right: isMe ? 0 : 50.w),
+        margin: EdgeInsets.only(bottom: 12.h, left: isMe ? 50.w : 0, right: isMe ? 0 : 50.w),
         padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 12.h),
         decoration: BoxDecoration(
           color: isMe ? AppColors.primary : Colors.white,
@@ -270,18 +417,8 @@ class _ChatbotPageState extends State<ChatbotPage> {
       alignment: Alignment.centerLeft,
       child: Container(
         padding: EdgeInsets.all(12.w),
-        decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16.r),
-            boxShadow: [
-              BoxShadow(
-                  color: Colors.black12, blurRadius: 4, offset: Offset(0, 2))
-            ]),
-        child: SizedBox(
-            width: 20.w,
-            height: 20.w,
-            child: CircularProgressIndicator(
-                strokeWidth: 2, color: AppColors.primary)),
+        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16.r), boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 4, offset: Offset(0, 2))]),
+        child: SizedBox(width: 20.w, height: 20.w, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary)),
       ),
     );
   }
@@ -293,10 +430,7 @@ class _ChatbotPageState extends State<ChatbotPage> {
         color: Colors.white,
         borderRadius: BorderRadius.vertical(top: Radius.circular(24.r)),
         boxShadow: [
-          BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 10,
-              offset: const Offset(0, -5)),
+          BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, -5)),
         ],
       ),
       child: Row(
@@ -308,8 +442,7 @@ class _ChatbotPageState extends State<ChatbotPage> {
                 hintText: "Ask me anything...",
                 fillColor: AppColors.background,
                 filled: true,
-                contentPadding:
-                    EdgeInsets.symmetric(horizontal: 20.w, vertical: 12.h),
+                contentPadding: EdgeInsets.symmetric(horizontal: 20.w, vertical: 12.h),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(30.r),
                   borderSide: BorderSide.none,
@@ -321,12 +454,13 @@ class _ChatbotPageState extends State<ChatbotPage> {
           GestureDetector(
             onTapDown: (_) => _startRecording(),
             onTapUp: (_) => _stopRecording(),
+            onTapCancel: () {
+               setState(() => _isRecording = false);
+            },
             child: CircleAvatar(
               radius: 24.r,
-              backgroundColor:
-                  _isRecording ? Colors.redAccent : AppColors.surface,
-              child: Icon(Icons.mic,
-                  color: _isRecording ? Colors.white : AppColors.primary),
+              backgroundColor: _isRecording ? Colors.redAccent : AppColors.surface,
+              child: Icon(Icons.mic, color: _isRecording ? Colors.white : AppColors.primary),
             ),
           ),
           Gap(8.w),
@@ -349,9 +483,5 @@ class ChatMessage {
   final bool isBot;
   final DateTime timestamp;
   final bool isError;
-  ChatMessage(
-      {required this.text,
-      required this.isBot,
-      required this.timestamp,
-      this.isError = false});
+  ChatMessage({required this.text, required this.isBot, required this.timestamp, this.isError = false});
 }
