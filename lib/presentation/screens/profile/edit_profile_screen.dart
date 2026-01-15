@@ -1,5 +1,6 @@
+import 'package:cogni_anchor/data/auth/auth_service.dart';
+import 'package:cogni_anchor/data/core/api_service.dart';
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
 
 class EditProfileScreen extends StatefulWidget {
@@ -10,8 +11,6 @@ class EditProfileScreen extends StatefulWidget {
 }
 
 class _EditProfileScreenState extends State<EditProfileScreen> {
-  final SupabaseClient _client = Supabase.instance.client;
-
   final _nameController = TextEditingController();
   final _contactController = TextEditingController();
 
@@ -28,20 +27,24 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   }
 
   Future<void> _loadProfile() async {
-    final user = _client.auth.currentUser;
-    if (user == null) return;
+    try {
+      final user = AuthService.instance.currentUser;
+      if (user == null) return;
 
-    final data =
-        await _client.from('users').select().eq('id', user.id).single();
+      final data = await ApiService.getUserProfile(user.id);
 
-    _nameController.text = data['name'] ?? '';
-    _contactController.text = data['contact'] ?? '';
-    _gender = data['gender'];
-    _dob = data['date_of_birth'] != null
-        ? DateTime.parse(data['date_of_birth'])
-        : null;
+      _nameController.text = data['name'] ?? '';
+      _contactController.text = data['contact'] ?? '';
+      _gender = data['gender'];
+      _dob = data['date_of_birth'] != null
+          ? DateTime.parse(data['date_of_birth'])
+          : null;
 
-    setState(() => _loading = false);
+      if (mounted) setState(() => _loading = false);
+    } catch (e) {
+      _showMsg("Failed to load profile");
+      if (mounted) setState(() => _loading = false);
+    }
   }
 
   Future<void> _saveProfile() async {
@@ -50,35 +53,32 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       return;
     }
 
-    if (_contactController.text.isNotEmpty &&
-        _contactController.text.length < 8) {
-      _showMsg("Invalid contact number");
-      return;
-    }
-
-    if (_dob != null && _dob!.isAfter(DateTime.now())) {
-      _showMsg("Invalid date of birth");
-      return;
-    }
-
     setState(() => _saving = true);
 
-    final user = _client.auth.currentUser;
-
-    await _client.from('users').update({
-      'name': _nameController.text.trim(),
-      'contact': _contactController.text.trim(),
-      'gender': _gender,
-      'date_of_birth': _dob?.toIso8601String(),
-    }).eq('id', user!.id);
-
-    setState(() => _saving = false);
-
-    _showMsg("Profile updated successfully");
-    Navigator.pop(context);
+    try {
+      final user = AuthService.instance.currentUser;
+      if (user != null) {
+        await ApiService.updateUserProfile(user.id, {
+          'name': _nameController.text.trim(),
+          'contact': _contactController.text.trim(),
+          'gender': _gender,
+          'date_of_birth': _dob?.toIso8601String(),
+        });
+        
+        if (mounted) {
+          _showMsg("Profile updated successfully");
+          Navigator.pop(context);
+        }
+      }
+    } catch (e) {
+      _showMsg("Update failed: $e");
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
   }
 
   void _showMsg(String msg) {
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
@@ -113,38 +113,40 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             Expanded(
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Column(
-                  children: [
-                    _field("Name", _nameController),
-                    _field("Contact", _contactController,
-                        keyboard: TextInputType.phone),
-                    _genderDropdown(),
-                    _dobPicker(),
-                    const Spacer(),
-                    SizedBox(
-                      width: double.infinity,
-                      height: 52,
-                      child: ElevatedButton(
-                        onPressed: _saving ? null : _saveProfile,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
+                child: SingleChildScrollView(
+                  child: Column(
+                    children: [
+                      _field("Name", _nameController),
+                      _field("Contact", _contactController,
+                          keyboard: TextInputType.phone),
+                      _genderDropdown(),
+                      _dobPicker(),
+                      const SizedBox(height: 20),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 52,
+                        child: ElevatedButton(
+                          onPressed: _saving ? null : _saveProfile,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
                           ),
-                        ),
-                        child: _saving
-                            ? const CircularProgressIndicator()
-                            : const Text(
-                                "Save",
-                                style: TextStyle(
-                                  color: Colors.black,
-                                  fontWeight: FontWeight.w600,
+                          child: _saving
+                              ? const CircularProgressIndicator()
+                              : const Text(
+                                  "Save",
+                                  style: TextStyle(
+                                    color: Colors.black,
+                                    fontWeight: FontWeight.w600,
+                                  ),
                                 ),
-                              ),
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 20),
-                  ],
+                      const SizedBox(height: 20),
+                    ],
+                  ),
                 ),
               ),
             ),

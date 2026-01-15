@@ -1,232 +1,265 @@
-import 'package:cogni_anchor/data/services/patient_status_service.dart';
+import 'dart:async';
+import 'package:cogni_anchor/data/auth/auth_service.dart';
+import 'package:cogni_anchor/data/core/api_service.dart';
+import 'package:cogni_anchor/data/core/background_service.dart';
+import 'package:cogni_anchor/presentation/constants/theme_constants.dart';
+import 'package:cogni_anchor/presentation/widgets/common/app_text.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:gap/gap.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:cogni_anchor/presentation/screens/app_initializer.dart';
 
 class PatientPermissionsScreen extends StatefulWidget {
   const PatientPermissionsScreen({super.key});
 
   @override
-  State<PatientPermissionsScreen> createState() =>
-      _PatientPermissionsScreenState();
+  State<PatientPermissionsScreen> createState() => _PatientPermissionsScreenState();
 }
 
 class _PatientPermissionsScreenState extends State<PatientPermissionsScreen> {
-  bool _locationGranted = false;
-  bool _micGranted = false;
-  bool _loading = false;
+  bool _isLocationSharingOn = false;
+  bool _isMicSharingOn = false;
 
-  final SupabaseClient _client = Supabase.instance.client;
+  bool _hasLocationPermission = false;
+  bool _hasMicPermission = false;
+
+  bool? _prevLocationState;
+  bool? _prevMicState;
+
+  Timer? _syncTimer;
+  bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    _loadExistingPermissionState();
+    _checkDevicePermissions();
+    _fetchBackendStatus();
+
+    _syncTimer = Timer.periodic(const Duration(seconds: 3), (timer) {
+      _fetchBackendStatus(silent: true);
+    });
   }
 
-  Future<void> _loadExistingPermissionState() async {
-    final user = _client.auth.currentUser;
-    if (user == null) return;
-
-    try {
-      final status = await _client
-          .from('patient_status')
-          .select('location_permission, mic_permission')
-          .eq('patient_user_id', user.id)
-          .maybeSingle();
-
-      if (status != null && mounted) {
-        setState(() {
-          _locationGranted = status['location_permission'] ?? false;
-          _micGranted = status['mic_permission'] ?? false;
-        });
-      }
-    } catch (_) {}
+  @override
+  void dispose() {
+    _syncTimer?.cancel();
+    super.dispose();
   }
 
-  Future<void> _requestLocation() async {
-    setState(() => _loading = true);
+  Future<void> _checkDevicePermissions() async {
+    final loc = await Permission.location.status;
+    final mic = await Permission.microphone.status;
 
-    try {
-      final foregroundStatus = await Permission.location.request();
-
-      if (!foregroundStatus.isGranted) {
-        await _updateLocationPermission(false);
-        return;
-      }
-
-      final backgroundStatus = await Permission.locationAlways.request();
-
-      final granted = backgroundStatus.isGranted;
-
-      await _updateLocationPermission(granted);
-
-      setState(() => _locationGranted = granted);
-    } finally {
-      setState(() => _loading = false);
+    if (mounted) {
+      setState(() {
+        _hasLocationPermission = loc.isGranted;
+        _hasMicPermission = mic.isGranted;
+      });
     }
   }
 
-  Future<void> _updateLocationPermission(bool granted) async {
-    await _client.from('patient_status').update({
-      'location_permission': granted,
-    }).eq('patient_user_id', _client.auth.currentUser!.id);
-  }
-
-  Future<void> _requestMic() async {
-    setState(() => _loading = true);
+  Future<void> _fetchBackendStatus({bool silent = false}) async {
+    if (!silent) setState(() => _isLoading = true);
 
     try {
-      final status = await Permission.microphone.request();
+      final userId = AuthService.instance.currentUser?.id;
+      if (userId != null) {
+        final data = await ApiService.getPatientStatus(userId);
 
-      final granted = status.isGranted;
+        final remoteLoc = data['location_toggle_on'] ?? false;
+        final remoteMic = data['mic_toggle_on'] ?? false;
 
-      setState(() => _micGranted = granted);
+        if (mounted) {
+          setState(() {
+            _isLocationSharingOn = remoteLoc;
+            _isMicSharingOn = remoteMic;
+            _isLoading = false;
+          });
+        }
 
-      await _client.from('patient_status').update({
-        'mic_permission': granted,
-      }).eq('patient_user_id', _client.auth.currentUser!.id);
+        if (_prevLocationState != remoteLoc) {
+          await BackgroundService.instance.setLocationEnabled(remoteLoc);
+          if (remoteLoc) await BackgroundService.instance.start();
+          _prevLocationState = remoteLoc;
+        }
+
+        if (_prevMicState != remoteMic) {
+          await BackgroundService.instance.setMicEnabled(remoteMic);
+          if (remoteMic) await BackgroundService.instance.start();
+          _prevMicState = remoteMic;
+        }
+      }
+    } catch (e) {
+      debugPrint("Error fetching status: $e");
     } finally {
-      setState(() => _loading = false);
+      if (!silent && mounted) setState(() => _isLoading = false);
     }
   }
 
-  Future<void> _continue() async {
-    await PatientStatusService.updateLastActive();
-
-    if (!mounted) return;
-
-    Navigator.pushAndRemoveUntil(
-      context,
-      MaterialPageRoute(builder: (_) => const AppInitializer()),
-      (_) => false,
+  Widget _buildPermissionTile({
+    required String title,
+    required String subtitle,
+    required IconData icon,
+    required bool isEnabled,
+    required bool hasDevicePermission,
+    required Color color,
+  }) {
+    return Container(
+      margin: EdgeInsets.only(bottom: 16.h),
+      padding: EdgeInsets.all(16.w),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16.r),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: EdgeInsets.all(12.w),
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(icon, color: color, size: 24.sp),
+              ),
+              Gap(16.w),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    AppText(
+                      title,
+                      fontSize: 16.sp,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    Gap(4.h),
+                    AppText(
+                      subtitle,
+                      fontSize: 12.sp,
+                      color: Colors.grey,
+                    ),
+                  ],
+                ),
+              ),
+              IgnorePointer(
+                ignoring: true,
+                child: Switch(
+                  value: isEnabled,
+                  activeThumbColor: color,
+                  onChanged: (val) {},
+                ),
+              ),
+            ],
+          ),
+          if (!hasDevicePermission && isEnabled) ...[
+            Gap(12.h),
+            Container(
+              padding: EdgeInsets.all(8.w),
+              decoration: BoxDecoration(
+                color: Colors.red.shade50,
+                borderRadius: BorderRadius.circular(8.r),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.warning_amber_rounded, color: Colors.red, size: 20.sp),
+                  Gap(8.w),
+                  Expanded(
+                    child: AppText(
+                      "Permission missing. Please enable in Settings.",
+                      fontSize: 12.sp,
+                      color: Colors.red.shade700,
+                    ),
+                  ),
+                  const TextButton(
+                    onPressed: openAppSettings,
+                    child: Text("Settings"),
+                  )
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF6F6F6),
-      body: SafeArea(
-        child: Column(
-          children: [
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
-              decoration: const BoxDecoration(
-                color: Color(0xFFFF653A),
-                borderRadius: BorderRadius.only(
-                  bottomLeft: Radius.circular(24),
-                  bottomRight: Radius.circular(24),
-                ),
-              ),
-              child: const Text(
-                'Permissions Required',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-            const SizedBox(height: 40),
-            _permissionTile(
-              title: 'Allow location access',
-              subtitle:
-                  'This allows your caretaker to see your live location if needed.',
-              granted: _locationGranted,
-              onTap: _requestLocation,
-            ),
-            const SizedBox(height: 20),
-            _permissionTile(
-              title: 'Allow microphone access',
-              subtitle:
-                  'This allows your caretaker to hear audio in emergencies.',
-              granted: _micGranted,
-              onTap: _requestMic,
-            ),
-            const Spacer(),
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: SizedBox(
-                width: double.infinity,
-                height: 50,
-                child: ElevatedButton(
-                  onPressed: _loading ? null : _continue,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFFF653A),
-                  ),
-                  child: const Text(
-                    'Continue',
-                    style: TextStyle(fontSize: 16),
-                  ),
-                ),
-              ),
-            ),
-          ],
+      backgroundColor: AppColors.background,
+      appBar: AppBar(
+        backgroundColor: AppColors.primary,
+        elevation: 4,
+        shadowColor: AppColors.primary.withValues(alpha: 0.3),
+        automaticallyImplyLeading: false,
+        centerTitle: true,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(bottom: Radius.circular(24.r)),
+        ),
+        title: AppText(
+          "Privacy & Permissions",
+          fontSize: 18.sp,
+          color: Colors.white,
+          fontWeight: FontWeight.w600,
         ),
       ),
-    );
-  }
-
-  Widget _permissionTile({
-    required String title,
-    required String subtitle,
-    required bool granted,
-    required VoidCallback onTap,
-  }) {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.08),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : SingleChildScrollView(
+              padding: EdgeInsets.all(20.w),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    padding: EdgeInsets.all(16.w),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(12.r),
+                      border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.info_outline, color: AppColors.primary),
+                        Gap(12.w),
+                        Expanded(
+                          child: AppText(
+                            "These settings are managed by your caretaker.",
+                            fontSize: 13.sp,
+                            color: AppColors.primary,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  subtitle,
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: Colors.grey.shade700,
+                  Gap(24.h),
+                  _buildPermissionTile(
+                    title: "Location Sharing",
+                    subtitle: "Allows caretaker to see your location",
+                    icon: Icons.location_on_rounded,
+                    color: Colors.blue,
+                    isEnabled: _isLocationSharingOn,
+                    hasDevicePermission: _hasLocationPermission,
                   ),
-                ),
-              ],
+                  _buildPermissionTile(
+                    title: "Environment Stream",
+                    subtitle: "Allows caretaker to hear surroundings",
+                    icon: Icons.mic_rounded,
+                    color: Colors.orange,
+                    isEnabled: _isMicSharingOn,
+                    hasDevicePermission: _hasMicPermission,
+                  ),
+                ],
+              ),
             ),
-          ),
-          const SizedBox(width: 12),
-          granted
-              ? const Icon(Icons.check_circle, color: Colors.green, size: 28)
-              : ElevatedButton(
-                  onPressed: onTap,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFFF653A),
-                  ),
-                  child: const Text("Allow"),
-                ),
-        ],
-      ),
     );
   }
 }

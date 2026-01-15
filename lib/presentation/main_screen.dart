@@ -1,15 +1,16 @@
-import 'package:cogni_anchor/data/models/user_model.dart';
-import 'package:cogni_anchor/data/services/live_location_service.dart';
+import 'package:cogni_anchor/data/auth/user_model.dart';
+import 'package:cogni_anchor/data/core/background_service.dart';
 import 'package:cogni_anchor/presentation/constants/theme_constants.dart';
 import 'package:cogni_anchor/presentation/screens/chatbot/chatbot_page.dart';
 import 'package:cogni_anchor/presentation/screens/face_recog/fr_intro_page.dart';
+import 'package:cogni_anchor/presentation/screens/permission/patient_permissions_screen.dart';
 import 'package:cogni_anchor/presentation/screens/permissions_screen.dart';
 import 'package:cogni_anchor/presentation/screens/reminder/reminder_page.dart';
 import 'package:cogni_anchor/presentation/screens/settings/settings_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:google_nav_bar/google_nav_bar.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 class MainScreen extends StatefulWidget {
   final UserModel userModel;
@@ -21,155 +22,48 @@ class MainScreen extends StatefulWidget {
 
 class _MainScreenState extends State<MainScreen> {
   int _selectedIndex = 0;
-
-  RealtimeChannel? _patientStatusChannel;
-  final SupabaseClient _client = Supabase.instance.client;
-
-  bool? _lastLocationToggle;
-  bool? _lastMicToggle;
-
-  late final List<Widget> _allPages = [
-    ReminderPage(userModel: widget.userModel), 
-    const PermissionsScreen(), 
-    const ChatbotPage(),
-    const FacialRecognitionPage(),
-    SettingsScreen(userModel: widget.userModel) 
-  ];
-
-  final List<Map<String, dynamic>> _allNavItems = [
-    {
-      'index': 0,
-      'iconOutlined': Icons.alarm_rounded,
-      'iconFilled': Icons.alarm,
-      'label': 'Alarm'
-    },
-    {
-      'index': 1,
-      'iconOutlined': Icons.share_location_rounded,
-      'iconFilled': Icons.share_location,
-      'label': 'Share'
-    },
-    {
-      'index': 2,
-      'iconOutlined': Icons.chat_bubble_outline_rounded,
-      'iconFilled': Icons.chat_bubble,
-      'label': 'Chat'
-    },
-    {
-      'index': 3,
-      'iconOutlined': Icons.face_outlined,
-      'iconFilled': Icons.face,
-      'label': 'Face'
-    },
-    {
-      'index': 4,
-      'iconOutlined': Icons.settings_outlined,
-      'iconFilled': Icons.settings,
-      'label': 'Settings'
-    },
-  ];
-
   late List<Widget> _pages;
   late List<Map<String, dynamic>> _finalNavItems;
+
+  final List<Map<String, dynamic>> _allNavItems = [
+    {'index': 0, 'iconOutlined': Icons.alarm_rounded, 'iconFilled': Icons.alarm, 'label': 'Alarm'},
+    {'index': 1, 'iconOutlined': Icons.share_location_rounded, 'iconFilled': Icons.share_location, 'label': 'Share'},
+    {'index': 2, 'iconOutlined': Icons.chat_bubble_outline_rounded, 'iconFilled': Icons.chat_bubble, 'label': 'Chat'},
+    {'index': 3, 'iconOutlined': Icons.face_outlined, 'iconFilled': Icons.face, 'label': 'Face'},
+    {'index': 4, 'iconOutlined': Icons.settings_outlined, 'iconFilled': Icons.settings, 'label': 'Settings'},
+  ];
 
   @override
   void initState() {
     super.initState();
-    _filterPagesAndNav();
+    _initPages(); // Initialize pages based on role
 
     if (widget.userModel == UserModel.patient) {
-      _startPatientStatusListener();
-
-      _checkInitialServiceStatus();
+      _checkAndStartService();
     }
   }
 
-  Future<void> _checkInitialServiceStatus() async {
-    final user = _client.auth.currentUser;
-    if (user == null) return;
+  void _initPages() {
+    final permissionsPage = widget.userModel == UserModel.patient ? const PatientPermissionsScreen() : const PermissionsScreen();
 
-    try {
-      final data = await _client
-          .from('patient_status')
-          .select('location_toggle_on, mic_toggle_on')
-          .eq('patient_user_id', user.id)
-          .maybeSingle();
+    final allPages = [ReminderPage(userModel: widget.userModel), permissionsPage, const ChatbotPage(), const FacialRecognitionPage(), SettingsScreen(userModel: widget.userModel)];
 
-      if (data != null && mounted) {
-        final locationToggle = data['location_toggle_on'] as bool? ?? false;
-        final micToggle = data['mic_toggle_on'] as bool? ?? false;
-
-        setState(() {
-          _lastLocationToggle = locationToggle;
-          _lastMicToggle = micToggle;
-        });
-
-        if (locationToggle) {
-          debugPrint(" Initial Check: Starting Live Location Service");
-          LiveLocationService.instance.start();
-        }
-      }
-    } catch (e) {
-      debugPrint(" Error checking initial status: $e");
-    }
-  }
-
-  void _startPatientStatusListener() {
-    final user = _client.auth.currentUser;
-    if (user == null) return;
-
-    _patientStatusChannel = _client
-        .channel('patient_status_${user.id}')
-        .onPostgresChanges(
-          event: PostgresChangeEvent.update,
-          schema: 'public',
-          table: 'patient_status',
-          callback: (payload) {
-            final newRow = payload.newRecord;
-            if (newRow == null) return;
-
-            final locationToggle = newRow['location_toggle_on'] as bool?;
-            final micToggle = newRow['mic_toggle_on'] as bool?;
-
-            if (_lastLocationToggle == null ||
-                locationToggle != _lastLocationToggle) {
-              if (locationToggle == true) {
-                LiveLocationService.instance.start();
-              } else {
-                LiveLocationService.instance.stop();
-              }
-            }
-
-            if (mounted) {
-              setState(() {
-                _lastLocationToggle = locationToggle;
-                _lastMicToggle = micToggle;
-              });
-            }
-          },
-        )
-        .subscribe();
-  }
-
-  void _filterPagesAndNav() {
     if (widget.userModel == UserModel.patient) {
-      List<int> allowedIndices = [0, 1, 2, 3, 4];
-
-      _pages = allowedIndices.map((i) => _allPages[i]).toList();
-      _finalNavItems = _allNavItems
-          .where((item) => allowedIndices.contains(item['index']))
-          .toList();
+      _pages = allPages;
+      _finalNavItems = _allNavItems;
     } else {
-      _pages = _allPages;
+      _pages = allPages;
       _finalNavItems = _allNavItems;
     }
   }
 
-  @override
-  void dispose() {
-    _patientStatusChannel?.unsubscribe();
-    LiveLocationService.instance.stop();
-    super.dispose();
+  Future<void> _checkAndStartService() async {
+    final locStatus = await Permission.locationAlways.status;
+    final micStatus = await Permission.microphone.status;
+
+    if (locStatus.isGranted || micStatus.isGranted) {
+      await BackgroundService.instance.start();
+    }
   }
 
   @override
@@ -180,12 +74,7 @@ class _MainScreenState extends State<MainScreen> {
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
           color: Colors.white,
-          boxShadow: [
-            BoxShadow(
-                color: Colors.black.withValues(alpha: 0.08),
-                blurRadius: 20,
-                offset: const Offset(0, -5))
-          ],
+          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 20, offset: const Offset(0, -5))],
         ),
         child: SafeArea(
           child: Padding(

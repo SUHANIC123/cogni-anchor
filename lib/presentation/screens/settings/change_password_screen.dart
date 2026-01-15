@@ -1,5 +1,6 @@
+import 'package:cogni_anchor/data/auth/auth_service.dart';
+import 'package:cogni_anchor/data/core/api_service.dart';
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
 class ChangePasswordScreen extends StatefulWidget {
   const ChangePasswordScreen({super.key});
@@ -9,8 +10,7 @@ class ChangePasswordScreen extends StatefulWidget {
 }
 
 class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
-  final TextEditingController _currentPasswordController =
-      TextEditingController();
+  final TextEditingController _currentPasswordController = TextEditingController();
   final TextEditingController _newPasswordController = TextEditingController();
 
   bool _isLoading = false;
@@ -32,64 +32,39 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
       return;
     }
 
-    if (!_isValidPassword(newPassword)) {
-      _showSnackBar(
-        "Password must be at least 8 characters with 1 number and 1 uppercase letter",
-      );
-      return;
-    }
-
     setState(() {
       _isLoading = true;
       _errorMessage = null;
     });
 
     try {
-      final supabase = Supabase.instance.client;
-      final user = supabase.auth.currentUser;
-
-      if (user == null || user.email == null) {
+      final user = AuthService.instance.currentUser;
+      if (user == null) {
         _showSnackBar("User not logged in");
         return;
       }
 
-      final response = await supabase.auth.signInWithPassword(
-        email: user.email!,
-        password: currentPassword,
+      await ApiService.changePassword(
+        user.id,
+        currentPassword,
+        newPassword,
       );
 
-      if (response.session == null) {
-        setState(() {
-          _errorMessage = "Current password is incorrect";
-        });
-        return;
+      if (mounted) {
+        _showSnackBar("Password changed successfully");
+        Navigator.pop(context);
       }
-
-      await supabase.auth.updateUser(
-        UserAttributes(password: newPassword),
-      );
-
-      _showSnackBar("Password changed successfully");
-      Navigator.pop(context);
-    } on AuthException {
-      setState(() {
-        _errorMessage = "Current password is incorrect";
-      });
     } catch (e) {
-      _showSnackBar("Something went wrong. Please try again.");
-    } finally {
       setState(() {
-        _isLoading = false;
+        _errorMessage = e.toString().replaceAll("Exception: ", "");
       });
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  bool _isValidPassword(String password) {
-    final regex = RegExp(r'^(?=.*[A-Z])(?=.*\d).{8,}$');
-    return regex.hasMatch(password);
-  }
-
   void _showSnackBar(String message) {
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(message)),
     );
@@ -155,13 +130,6 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                           ),
                         ),
                       ),
-                    const Text(
-                      "Password must be at least 8 characters with at least 1 number and 1 uppercase letter",
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.black54,
-                      ),
-                    ),
                     const Spacer(),
                     SizedBox(
                       width: double.infinity,

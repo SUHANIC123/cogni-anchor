@@ -1,5 +1,12 @@
 import 'dart:async';
+import 'dart:typed_data';
+import 'package:cogni_anchor/data/core/config/api_config.dart';
+import 'package:cogni_anchor/data/core/pair_context.dart';
+
 import 'package:flutter/material.dart';
+import 'package:web_socket_channel/io.dart';
+import 'package:web_socket_channel/web_socket_channel.dart';
+import 'package:sound_stream/sound_stream.dart';
 
 class MicSharingScreen extends StatefulWidget {
   const MicSharingScreen({super.key});
@@ -8,15 +15,23 @@ class MicSharingScreen extends StatefulWidget {
   State<MicSharingScreen> createState() => _MicSharingScreenState();
 }
 
-class _MicSharingScreenState extends State<MicSharingScreen>
-    with SingleTickerProviderStateMixin {
+class _MicSharingScreenState extends State<MicSharingScreen> with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _pulse;
+
+  WebSocketChannel? _channel;
+  final PlayerStream _player = PlayerStream();
+  bool _isConnected = false;
+  String _statusText = "Connecting...";
 
   @override
   void initState() {
     super.initState();
+    _initAnimation();
+    _initAudioStream();
+  }
 
+  void _initAnimation() {
     _controller = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1200),
@@ -27,8 +42,59 @@ class _MicSharingScreenState extends State<MicSharingScreen>
     );
   }
 
+  Future<void> _initAudioStream() async {
+    final pairId = PairContext.pairId;
+    if (pairId == null) {
+      setState(() => _statusText = "Error: No Pair ID");
+      return;
+    }
+
+    try {
+      await _player.initialize();
+
+      String baseUrl = ApiConfig.baseUrl.replaceFirst('http', 'ws');
+      final url = '$baseUrl/ws/audio/$pairId/caretaker';
+
+      _channel = IOWebSocketChannel.connect(Uri.parse(url));
+
+      _sendCommandWithRetry("START_MIC");
+
+      _channel!.stream.listen((data) {
+        if (data is List<int>) {
+          if (!_isConnected) {
+            setState(() {
+              _isConnected = true;
+              _statusText = "Listening to Patient...";
+            });
+          }
+          _player.writeChunk(Uint8List.fromList(data));
+        }
+      }, onError: (e) {
+        setState(() => _statusText = "Connection Error");
+        debugPrint("Audio Error: $e");
+      });
+
+      await _player.start();
+    } catch (e) {
+      setState(() => _statusText = "Failed to connect");
+      debugPrint("Connection failed: $e");
+    }
+  }
+
+  Future<void> _sendCommandWithRetry(String cmd) async {
+    for (int i = 0; i < 3; i++) {
+      if (_channel != null) {
+        _channel!.sink.add(cmd);
+      }
+      await Future.delayed(const Duration(seconds: 1));
+    }
+  }
+
   @override
   void dispose() {
+    _channel?.sink.add("STOP_MIC");
+    _channel?.sink.close();
+    _player.stop();
     _controller.dispose();
     super.dispose();
   }
@@ -53,13 +119,12 @@ class _MicSharingScreenState extends State<MicSharingScreen>
               child: Row(
                 children: [
                   IconButton(
-                    icon: const Icon(Icons.arrow_back_ios_new,
-                        color: Colors.white),
+                    icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white),
                     onPressed: () => Navigator.pop(context),
                   ),
                   const Expanded(
                     child: Text(
-                      "Microphone Sharing",
+                      "Live Audio Monitor",
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         color: Colors.white,
@@ -77,7 +142,7 @@ class _MicSharingScreenState extends State<MicSharingScreen>
               animation: _pulse,
               builder: (_, child) {
                 return Transform.scale(
-                  scale: _pulse.value,
+                  scale: _isConnected ? _pulse.value : 1.0,
                   child: child,
                 );
               },
@@ -86,15 +151,15 @@ class _MicSharingScreenState extends State<MicSharingScreen>
                 height: 180,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: const Color(0xFFFF653A).withOpacity(0.15),
+                  color: _isConnected ? const Color(0xFFFF653A).withValues(alpha: 0.15) : Colors.grey.withValues(alpha: 0.1),
                 ),
                 child: Center(
                   child: Container(
                     width: 120,
                     height: 120,
-                    decoration: const BoxDecoration(
+                    decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: Color(0xFFFF653A),
+                      color: _isConnected ? const Color(0xFFFF653A) : Colors.grey,
                     ),
                     child: const Icon(
                       Icons.mic,
@@ -106,23 +171,11 @@ class _MicSharingScreenState extends State<MicSharingScreen>
               ),
             ),
             const SizedBox(height: 24),
-            const Text(
-              "Microphone sharing is active",
-              style: TextStyle(
+            Text(
+              _statusText,
+              style: const TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w600,
-              ),
-            ),
-            const SizedBox(height: 8),
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 32),
-              child: Text(
-                "Your caregiver can receive audio updates from your device.",
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Colors.black54,
-                ),
               ),
             ),
             const Spacer(),
@@ -142,7 +195,7 @@ class _MicSharingScreenState extends State<MicSharingScreen>
                     Navigator.pop(context);
                   },
                   child: const Text(
-                    "Stop Sharing",
+                    "Stop Listening",
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w600,

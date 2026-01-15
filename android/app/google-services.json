@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "523758033958",
+    "project_id": "cogni-anchor",
+    "storage_bucket": "cogni-anchor.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:523758033958:android:1808a36e56448bcd84dae7",
+        "android_client_info": {
+          "package_name": "com.example.cogni_anchor"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA571_TRC1zgFLHSpz0-M9ZUPAQHqpT3CQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -16,8 +16,8 @@ class ReminderMainCardWidget extends StatelessWidget {
       padding: EdgeInsets.all(18.w),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(16.r),
-        gradient: LinearGradient(colors: [color, color.withOpacity(0.7)], begin: Alignment.topLeft, end: Alignment.bottomRight),
-        boxShadow: [BoxShadow(color: color.withOpacity(0.3), blurRadius: 12, offset: const Offset(0, 4))],
+        gradient: LinearGradient(colors: [color, color.withValues(alpha: 0.7)], begin: Alignment.topLeft, end: Alignment.bottomRight),
+        boxShadow: [BoxShadow(color: color.withValues(alpha: 0.3), blurRadius: 12, offset: const Offset(0, 4))],
       ),
       child: Row(
         children: [
@@ -25,15 +25,13 @@ class ReminderMainCardWidget extends StatelessWidget {
             width: 55.w,
             height: 55.w,
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.2),
+              color: Colors.white.withValues(alpha: 0.2),
               shape: BoxShape.circle,
-              border: Border.all(color: Colors.white.withOpacity(0.4), width: 2),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.4), width: 2),
             ),
             child: Icon(Icons.upcoming, color: Colors.white, size: 30.sp),
           ),
-
           SizedBox(width: 16.w),
-
           Expanded(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -46,7 +44,7 @@ class ReminderMainCardWidget extends StatelessWidget {
                 SizedBox(height: 6.h),
                 Text(
                   title,
-                  style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w600, color: Colors.white.withOpacity(0.9)),
+                  style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w600, color: Colors.white.withValues(alpha: 0.9)),
                 ),
                 SizedBox(height: 4.h),
                 Row(

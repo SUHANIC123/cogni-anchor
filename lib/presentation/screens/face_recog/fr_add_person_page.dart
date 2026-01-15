@@ -1,9 +1,9 @@
 import 'dart:io';
 import 'package:camera/camera.dart';
-import 'package:cogni_anchor/data/services/api_service.dart';
-import 'package:cogni_anchor/data/services/camera_store.dart';
-import 'package:cogni_anchor/data/services/embedding_service.dart';
-import 'package:cogni_anchor/data/services/face_crop_service.dart';
+import 'package:cogni_anchor/data/chatbot/embedding_service.dart';
+import 'package:cogni_anchor/data/core/api_service.dart';
+import 'package:cogni_anchor/data/face_recog/camera_store.dart';
+import 'package:cogni_anchor/data/face_recog/face_crop_service.dart';
 import 'package:cogni_anchor/presentation/constants/theme_constants.dart';
 import 'package:cogni_anchor/presentation/widgets/common/app_text.dart';
 import 'package:cogni_anchor/presentation/widgets/face_recog/fr_components.dart';

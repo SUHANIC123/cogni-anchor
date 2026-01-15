@@ -47,12 +47,12 @@ class _TermsConditionsScreenState extends State<TermsConditionsScreen> {
               ],
             ),
           ),
-          Expanded(
+          const Expanded(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.all(16),
+              padding: EdgeInsets.all(16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                children: const [
+                children: [
                   Text(
                     "1. General Usage\n\n"
                     "This application is designed to assist individuals living with dementia and their caregivers by providing tools for reminders, face recognition, and information management. Users must ensure that all information provided is accurate, complete, and kept up to date. The application should be used responsibly and only for its intended purpose.\n\n"

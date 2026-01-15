@@ -1,18 +1,17 @@
-import 'package:cogni_anchor/data/models/user_model.dart';
-import 'package:cogni_anchor/data/services/pair_context.dart';
-import 'package:cogni_anchor/data/services/patient_status_service.dart';
+import 'package:cogni_anchor/data/auth/auth_service.dart';
+import 'package:cogni_anchor/data/auth/user_model.dart';
+import 'package:cogni_anchor/data/core/pair_context.dart';
 import 'package:cogni_anchor/presentation/constants/theme_constants.dart';
+import 'package:cogni_anchor/presentation/screens/profile/dementia_profile_screen.dart';
+import 'package:cogni_anchor/presentation/screens/profile/edit_profile_screen.dart';
 import 'package:cogni_anchor/presentation/widgets/common/app_text.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:gap/gap.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
-import 'dementia_profile_screen.dart';
+import 'package:cogni_anchor/presentation/screens/auth/login_page.dart';
 import 'change_password_screen.dart';
 import 'terms_conditions_screen.dart';
-import 'package:cogni_anchor/presentation/screens/auth/login_page.dart';
-import 'edit_profile_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   final UserModel userModel;
@@ -24,84 +23,30 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  final SupabaseClient _client = Supabase.instance.client;
-
   String? pairId;
-  bool _loading = true;
 
   @override
   void initState() {
     super.initState();
-    _loadPair();
-  }
-
-  Future<void> _loadPair() async {
-    final user = _client.auth.currentUser;
-    if (user == null) return;
-
-    try {
-      if (widget.userModel == UserModel.patient) {
-        final existing = await _client
-            .from('pairs')
-            .select()
-            .eq('patient_user_id', user.id)
-            .maybeSingle();
-
-        if (existing == null) {
-          final inserted = await _client
-              .from('pairs')
-              .insert({'patient_user_id': user.id})
-              .select()
-              .single();
-          pairId = inserted['id'];
-        } else {
-          pairId = existing['id'];
-        }
-        PairContext.set(pairId!);
-      }
-
-      if (widget.userModel == UserModel.caretaker) {
-        final existing = await _client
-            .from('pairs')
-            .select()
-            .eq('caretaker_user_id', user.id)
-            .maybeSingle();
-
-        pairId = existing?['id'];
-        if (pairId != null) {
-          PairContext.set(pairId!);
-        }
-      }
-    } catch (_) {
-      _showMsg("Failed to load pairing info");
-    }
-
-    if (!mounted) return;
-    setState(() => _loading = false);
+    pairId = PairContext.pairId;
   }
 
   Future<void> _connectToPatient(String enteredPairId) async {
-    final user = _client.auth.currentUser;
-    if (user == null) return;
+    try {
+      final caretakerId = AuthService.instance.currentUser?.id;
+      if (caretakerId == null) {
+        throw Exception("User not logged in");
+      }
 
-    final cleanId = enteredPairId.trim();
-
-    final pair =
-        await _client.from('pairs').select().eq('id', cleanId).maybeSingle();
-
-    if (pair == null) throw Exception("Invalid Pair ID");
-    if (pair['caretaker_user_id'] != null) {
-      throw Exception("Pair already connected");
+      await AuthService.instance.connectPatient(enteredPairId.trim(), caretakerId);
+      
+      setState(() {
+        pairId = PairContext.pairId;
+      });
+      _showMsg("Connected successfully!");
+    } catch (e) {
+      _showMsg(e.toString().replaceAll("Exception: ", ""));
     }
-
-    await _client
-        .from('pairs')
-        .update({'caretaker_user_id': user.id}).eq('id', cleanId);
-
-    setState(() {
-      pairId = cleanId;
-      PairContext.set(pairId!);
-    });
   }
 
   void _showPairIdDialog() {
@@ -110,34 +55,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(16.r)),
-        title: AppText("Connect to Patient",
-            fontSize: 18.sp, fontWeight: FontWeight.w600),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16.r)),
+        title: AppText("Connect to Patient", fontSize: 18.sp, fontWeight: FontWeight.w600),
         content: TextField(
           controller: controller,
           decoration: InputDecoration(
             labelText: "Enter Patient Pair ID",
-            border:
-                OutlineInputBorder(borderRadius: BorderRadius.circular(12.r)),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12.r)),
           ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: AppText("Cancel", color: Colors.grey),
+            child: const AppText("Cancel", color: Colors.grey),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
             onPressed: () async {
-              try {
-                await _connectToPatient(controller.text);
-                if (mounted) Navigator.pop(context);
-              } catch (_) {
-                _showMsg("Invalid Pair ID");
-              }
+              if (controller.text.isEmpty) return;
+              Navigator.pop(context);  
+              await _connectToPatient(controller.text);
             },
-            child: AppText("Connect", color: Colors.white),
+            child: const AppText("Connect", color: Colors.white),
           ),
         ],
       ),
@@ -159,13 +98,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _logout() async {
     Navigator.pop(context);
 
-    if (widget.userModel == UserModel.patient) {
-      await PatientStatusService.markLoggedOut();
-    }
-
-    await _client.auth.signOut();
-    PairContext.clear();
-
+    AuthService.instance.signOut();
+    
     Navigator.pushAndRemoveUntil(
       context,
       MaterialPageRoute(builder: (_) => const LoginPage()),
@@ -190,7 +124,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: AppText("No", color: Colors.grey),
+          child: const AppText("No", color: Colors.grey),
         ),
         ElevatedButton(
           style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
@@ -201,34 +135,30 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  void _go(Widget page) {
+    Navigator.push(context, MaterialPageRoute(builder: (_) => page));
+  }
+
   @override
   Widget build(BuildContext context) {
-    if (_loading) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
-    }
-
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
         backgroundColor: AppColors.primary,
         elevation: 4,
-        shadowColor: AppColors.primary.withOpacity(0.3),
+        shadowColor: AppColors.primary.withValues(alpha: 0.3),
         automaticallyImplyLeading: false,
         centerTitle: true,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(bottom: Radius.circular(24.r)),
         ),
-        title: AppText("Settings",
-            fontSize: 18.sp, color: Colors.white, fontWeight: FontWeight.w600),
+        title: AppText("Settings", fontSize: 18.sp, color: Colors.white, fontWeight: FontWeight.w600),
       ),
       body: SingleChildScrollView(
         physics: const BouncingScrollPhysics(),
         padding: EdgeInsets.all(20.w),
         child: Column(
           children: [
-            // 🔹 Profile Header (Moved from AppBar)
             Container(
               padding: EdgeInsets.symmetric(vertical: 20.h),
               child: Column(
@@ -240,7 +170,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       shape: BoxShape.circle,
                       boxShadow: [
                         BoxShadow(
-                            color: Colors.black.withOpacity(0.1),
+                            color: Colors.black.withValues(alpha: 0.1),
                             blurRadius: 10,
                             offset: const Offset(0, 4)),
                       ],
@@ -248,8 +178,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     child: CircleAvatar(
                       radius: 40.r,
                       backgroundColor: AppColors.primaryLight,
-                      child: Icon(Icons.person,
-                          size: 40.sp, color: AppColors.primary),
+                      child: Icon(Icons.person, size: 40.sp, color: AppColors.primary),
                     ),
                   ),
                   Gap(12.h),
@@ -261,7 +190,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     fontWeight: FontWeight.w600,
                   ),
                   AppText(
-                    _client.auth.currentUser?.email ?? "",
+                    AuthService.instance.currentUser?.email ?? "User",
                     fontSize: 14.sp,
                     color: Colors.grey,
                   ),
@@ -271,7 +200,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
             Gap(10.h),
 
-            // 🔹 Menu Items
             _tile(
               Icons.edit_outlined,
               "Edit Profile",
@@ -315,10 +243,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  void _go(Widget page) {
-    Navigator.push(context, MaterialPageRoute(builder: (_) => page));
-  }
-
   Widget _patientPairIdBox() {
     return Container(
       margin: EdgeInsets.only(bottom: 12.h),
@@ -333,15 +257,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
             children: [
               Expanded(
                 child: Container(
-                  padding:
-                      EdgeInsets.symmetric(horizontal: 12.w, vertical: 8.h),
+                  padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 8.h),
                   decoration: BoxDecoration(
                     color: AppColors.background,
                     borderRadius: BorderRadius.circular(8.r),
                     border: Border.all(color: Colors.grey.shade300),
                   ),
-                  child: SelectableText(pairId ?? "",
-                      style: TextStyle(fontSize: 14.sp, fontFamily: 'Poppins')),
+                  child: SelectableText(pairId ?? "", style: TextStyle(fontSize: 14.sp, fontFamily: 'Poppins')),
                 ),
               ),
               IconButton(
@@ -366,16 +288,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          AppText("Connected Pair ID",
-              fontSize: 16.sp, fontWeight: FontWeight.w600),
+          AppText("Connected Pair ID", fontSize: 16.sp, fontWeight: FontWeight.w600),
           Gap(8.h),
           Container(
             width: double.infinity,
             padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 12.h),
             decoration: BoxDecoration(
-              color: Colors.green.withOpacity(0.1),
+              color: Colors.green.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(8.r),
-              border: Border.all(color: Colors.green.withOpacity(0.3)),
+              border: Border.all(color: Colors.green.withValues(alpha: 0.3)),
             ),
             child: Row(
               children: [
@@ -403,7 +324,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         leading: Container(
           padding: EdgeInsets.all(8.w),
           decoration: BoxDecoration(
-            color: AppColors.primary.withOpacity(0.1),
+            color: AppColors.primary.withValues(alpha: 0.1),
             shape: BoxShape.circle,
           ),
           child: Icon(icon, color: AppColors.primary, size: 20.sp),
@@ -411,8 +332,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         title: AppText(title, fontSize: 15.sp, fontWeight: FontWeight.w500),
         trailing: Icon(Icons.chevron_right, color: Colors.grey.shade400),
         onTap: onTap,
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(16.r)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16.r)),
       ),
     );
   }
@@ -425,7 +345,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         leading: Container(
           padding: EdgeInsets.all(8.w),
           decoration: BoxDecoration(
-            color: Colors.red.withOpacity(0.1),
+            color: Colors.red.withValues(alpha: 0.1),
             shape: BoxShape.circle,
           ),
           child: Icon(Icons.logout, color: Colors.red, size: 20.sp),
@@ -437,8 +357,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           fontWeight: FontWeight.w600,
         ),
         onTap: _confirmLogout,
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(16.r)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16.r)),
       ),
     );
   }
@@ -449,7 +368,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       borderRadius: BorderRadius.circular(16.r),
       boxShadow: [
         BoxShadow(
-          color: Colors.black.withOpacity(0.05),
+          color: Colors.black.withValues(alpha: 0.05), 
           blurRadius: 10,
           offset: const Offset(0, 4),
         ),

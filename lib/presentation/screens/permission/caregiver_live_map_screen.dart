@@ -1,9 +1,12 @@
-import 'dart:async';
-import 'package:cogni_anchor/data/services/pair_context.dart';
+import 'dart:convert';
+import 'package:cogni_anchor/data/core/config/api_config.dart';
+import 'package:cogni_anchor/data/core/pair_context.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:web_socket_channel/io.dart';
+import 'package:web_socket_channel/web_socket_channel.dart';
 
 class CaregiverLiveMapScreen extends StatefulWidget {
   const CaregiverLiveMapScreen({super.key});
@@ -13,58 +16,63 @@ class CaregiverLiveMapScreen extends StatefulWidget {
 }
 
 class _CaregiverLiveMapScreenState extends State<CaregiverLiveMapScreen> {
-  final SupabaseClient _client = Supabase.instance.client;
-  StreamSubscription? _locationSubscription;
-
+  WebSocketChannel? _channel;
   LatLng? _currentLocation;
   final MapController _mapController = MapController();
+
+  bool _isConnected = false;
+  bool _isMapReady = false;
 
   @override
   void initState() {
     super.initState();
-    _listenToLiveLocation();
+    _connectToLiveStream();
   }
 
-  void _listenToLiveLocation() {
+  void _connectToLiveStream() {
     final pairId = PairContext.pairId;
+    if (pairId == null) return;
 
-    if (pairId == null) {
-      debugPrint(" No paired patient");
-      return;
-    }
+    String baseUrl = ApiConfig.baseUrl.replaceFirst('http', 'ws');
+    final url = '$baseUrl/ws/location/$pairId/caretaker';
 
-    _locationSubscription = _client
-        .from('live_location')
-        .stream(primaryKey: ['patient_user_id'])
-        .eq('pair_id', pairId)
-        .listen((rows) {
-          if (rows.isEmpty) {
-            debugPrint(" No live location rows yet");
-            return;
+    try {
+      _channel = IOWebSocketChannel.connect(Uri.parse(url));
+
+      _channel!.stream.listen((message) {
+        final data = jsonDecode(message);
+        final lat = data['latitude'] as double?;
+        final lng = data['longitude'] as double?;
+
+        if (lat != null && lng != null) {
+          final newLocation = LatLng(lat, lng);
+
+          if (mounted) {
+            setState(() {
+              _currentLocation = newLocation;
+              _isConnected = true;
+            });
+
+            if (_isMapReady) {
+              _mapController.move(newLocation, 16);
+            }
           }
-
-          debugPrint(" live_location rows: $rows");
-
-          final row = rows.first;
-
-          final lat = row['latitude'] as double?;
-          final lng = row['longitude'] as double?;
-
-          if (lat == null || lng == null) return;
-
-          final newPosition = LatLng(lat, lng);
-
-          setState(() {
-            _currentLocation = newPosition;
-          });
-
-          _mapController.move(newPosition, 16);
-        });
+        }
+      }, onError: (error) {
+        debugPrint("WS Error: $error");
+        if (mounted) setState(() => _isConnected = false);
+      }, onDone: () {
+        debugPrint("WS Closed");
+        if (mounted) setState(() => _isConnected = false);
+      });
+    } catch (e) {
+      debugPrint("Connection failed: $e");
+    }
   }
 
   @override
   void dispose() {
-    _locationSubscription?.cancel();
+    _channel?.sink.close();
     super.dispose();
   }
 
@@ -72,41 +80,62 @@ class _CaregiverLiveMapScreenState extends State<CaregiverLiveMapScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Live Patient Location"),
+        title: Row(
+          children: [
+            const Text("Live Patient Location"),
+            const SizedBox(width: 10),
+            if (_isConnected) const Icon(Icons.circle, color: Colors.green, size: 12) else const SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)),
+          ],
+        ),
         backgroundColor: const Color(0xFFFF653A),
       ),
       body: _currentLocation == null
           ? const Center(
-              child: Text(
-                "Waiting for patient location...",
-                style: TextStyle(fontSize: 16),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  CircularProgressIndicator(),
+                  SizedBox(height: 16),
+                  Text("Waiting for patient location signal..."),
+                ],
               ),
             )
           : FlutterMap(
               mapController: _mapController,
               options: MapOptions(
-                center: _currentLocation!,
-                zoom: 16,
-                interactiveFlags:
-                    InteractiveFlag.drag | InteractiveFlag.pinchZoom,
+                initialCenter: _currentLocation!,
+                initialZoom: 16,
+                interactionOptions: const InteractionOptions(
+                  flags: InteractiveFlag.drag | InteractiveFlag.pinchZoom,
+                ),
+                onMapReady: () {
+                  _isMapReady = true;
+                },
               ),
               children: [
                 TileLayer(
-                  urlTemplate:
-                      "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
-                  subdomains: const ['a', 'b', 'c'],
+                  urlTemplate: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
                   userAgentPackageName: 'com.example.cogni_anchor',
                 ),
                 MarkerLayer(
                   markers: [
                     Marker(
-                      width: 50,
-                      height: 50,
+                      width: 60,
+                      height: 60,
                       point: _currentLocation!,
-                      child: const Icon(
-                        Icons.location_pin,
-                        color: Colors.red,
-                        size: 40,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(color: Colors.black.withValues(alpha: 0.2), blurRadius: 8),
+                          ],
+                        ),
+                        child: const Icon(
+                          Icons.person_pin_circle,
+                          color: Color(0xFFFF653A),
+                          size: 40,
+                        ),
                       ),
                     ),
                   ],

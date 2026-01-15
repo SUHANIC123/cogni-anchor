@@ -6,6 +6,8 @@ abstract class ReminderEvent {
 
 class LoadReminders extends ReminderEvent {}
 
+class InitializeReminderWebSocket extends ReminderEvent {}
+
 class AddReminder extends ReminderEvent {
   final Reminder reminder;
   const AddReminder(this.reminder);

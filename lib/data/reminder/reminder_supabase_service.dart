@@ -1,4 +1,4 @@
-import 'package:cogni_anchor/data/models/reminder_model.dart';
+import 'package:cogni_anchor/data/reminder/reminder_model.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class ReminderSupabaseService {

@@ -11,7 +11,6 @@ class FRResultNotFoundPage extends StatelessWidget {
       body: Stack(
         children: [
           Container(color: Colors.grey.shade300),
-
           Positioned(
             top: 60.h,
             left: 20.w,
@@ -19,20 +18,14 @@ class FRResultNotFoundPage extends StatelessWidget {
             child: Container(
               padding: EdgeInsets.all(12.w),
               decoration: BoxDecoration(
-                gradient: LinearGradient(colors: [
-                  Colors.redAccent.withOpacity(0.9),
-                  Colors.redAccent.withOpacity(0.6)
-                ]),
+                gradient: LinearGradient(colors: [Colors.redAccent.withValues(alpha: 0.9), Colors.redAccent.withValues(alpha: 0.6)]),
                 borderRadius: BorderRadius.circular(12.r),
               ),
               child: Column(
                 children: [
                   Text(
                     "Person not Recognized!",
-                    style: TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16.sp),
+                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16.sp),
                   ),
                   Text(
                     "We can't find them in your database",
@@ -42,7 +35,6 @@ class FRResultNotFoundPage extends StatelessWidget {
               ),
             ),
           ),
-
           const Align(alignment: Alignment.center, child: FRNotFoundCard()),
         ],
       ),

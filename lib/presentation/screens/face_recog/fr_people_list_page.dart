@@ -1,4 +1,6 @@
-import 'package:cogni_anchor/data/services/api_service.dart';
+import 'package:cogni_anchor/data/core/api_service.dart';
+import 'package:cogni_anchor/data/core/config/api_config.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:cogni_anchor/presentation/constants/theme_constants.dart';
@@ -30,9 +32,9 @@ class _FRPeopleListPageState extends State<FRPeopleListPage> {
       final data = await ApiService.getPeople();
       setState(() => people = data);
     } catch (e) {
-      if(mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Failed to load people")));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Failed to load people")));
     } finally {
-      if(mounted) setState(() => loading = false);
+      if (mounted) setState(() => loading = false);
     }
   }
 
@@ -97,10 +99,13 @@ class _FRPeopleListPageState extends State<FRPeopleListPage> {
                 ),
                 SizedBox(width: 14.w),
                 Expanded(
-                  child: ElevatedButton(
+                  child: OutlinedButton(
                     onPressed: () => Navigator.pop(context, true),
                     style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-                    child: const Text("Yes, Delete"),
+                    child: const Text(
+                      "Yes, Delete",
+                      style: TextStyle(color: Colors.white),
+                    ),
                   ),
                 ),
               ],
@@ -112,6 +117,9 @@ class _FRPeopleListPageState extends State<FRPeopleListPage> {
   }
 
   Widget _iosListTile(Map<String, dynamic> p) {
+    final String? rawUrl = p['image_url'];
+    final String fullUrl = (rawUrl != null && rawUrl.startsWith('/')) ? "${ApiConfig.baseUrl}$rawUrl" : (rawUrl ?? '');
+
     return InkWell(
       onTap: () => _onPersonTap(p),
       child: Container(
@@ -125,12 +133,12 @@ class _FRPeopleListPageState extends State<FRPeopleListPage> {
             ClipRRect(
               borderRadius: BorderRadius.circular(10.r),
               child: CachedNetworkImage(
-                imageUrl: p['image_url'] ?? '',
+                imageUrl: fullUrl,
                 width: 56.w,
                 height: 56.w,
                 fit: BoxFit.cover,
                 placeholder: (_, __) => Container(color: Colors.grey[200]),
-                errorWidget: (_, __, ___) => Container(color: Colors.grey[200]),
+                errorWidget: (_, __, ___) => Container(color: Colors.grey[200], child: Icon(Icons.person, color: Colors.grey[400])),
               ),
             ),
             SizedBox(width: 12.w),

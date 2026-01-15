@@ -12,7 +12,7 @@ class ReminderChildCardWidget extends StatelessWidget {
     required this.title,
     required this.date,
     required this.time,
-    required this.color, 
+    required this.color,
   });
 
   @override
@@ -25,7 +25,7 @@ class ReminderChildCardWidget extends StatelessWidget {
         borderRadius: BorderRadius.circular(12.r),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 8,
             offset: const Offset(0, 3),
           ),
@@ -38,7 +38,7 @@ class ReminderChildCardWidget extends StatelessWidget {
             width: 40.w,
             height: 40.w,
             decoration: BoxDecoration(
-              color: color.withOpacity(0.15),
+              color: color.withValues(alpha: 0.15),
               shape: BoxShape.circle,
             ),
             child: Icon(

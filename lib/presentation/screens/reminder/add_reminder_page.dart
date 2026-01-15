@@ -1,4 +1,4 @@
-import 'package:cogni_anchor/data/models/reminder_model.dart';
+import 'package:cogni_anchor/data/reminder/reminder_model.dart';
 import 'package:cogni_anchor/logic/bloc/reminder/reminder_bloc.dart';
 import 'package:cogni_anchor/presentation/constants/theme_constants.dart';
 import 'package:cogni_anchor/presentation/widgets/common/app_text.dart';
@@ -36,7 +36,7 @@ class _AddReminderPageState extends State<AddReminderPage> {
         return Theme(
           data: ThemeData.light().copyWith(
             primaryColor: AppColors.primary,
-            colorScheme: ColorScheme.light(primary: AppColors.primary),
+            colorScheme: const ColorScheme.light(primary: AppColors.primary),
           ),
           child: child!,
         );
@@ -55,7 +55,7 @@ class _AddReminderPageState extends State<AddReminderPage> {
         return Theme(
           data: ThemeData.light().copyWith(
             primaryColor: AppColors.primary,
-            colorScheme: ColorScheme.light(primary: AppColors.primary),
+            colorScheme: const ColorScheme.light(primary: AppColors.primary),
           ),
           child: child!,
         );

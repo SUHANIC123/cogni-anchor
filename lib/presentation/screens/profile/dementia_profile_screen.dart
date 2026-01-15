@@ -1,6 +1,7 @@
-import 'package:cogni_anchor/data/services/pair_context.dart';
+import 'package:cogni_anchor/data/auth/auth_service.dart';
+import 'package:cogni_anchor/data/core/api_service.dart';
+import 'package:cogni_anchor/data/core/pair_context.dart';
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
 
 class DementiaProfileScreen extends StatefulWidget {
@@ -11,8 +12,6 @@ class DementiaProfileScreen extends StatefulWidget {
 }
 
 class _DementiaProfileScreenState extends State<DementiaProfileScreen> {
-  final SupabaseClient _client = Supabase.instance.client;
-
   Map<String, dynamic>? _patientData;
   bool _loading = true;
 
@@ -24,58 +23,40 @@ class _DementiaProfileScreenState extends State<DementiaProfileScreen> {
 
   Future<void> _loadPatientProfile() async {
     try {
-      final user = _client.auth.currentUser;
+      String? pairId = PairContext.pairId;
+      final user = AuthService.instance.currentUser;
+
       if (user == null) {
         _showMsg("Not logged in");
         return;
       }
 
-      String? pairId = PairContext.pairId;
-
       if (pairId == null) {
-        final pair = await _client
-            .from('pairs')
-            .select()
-            .or(
-              'patient_user_id.eq.${user.id},caretaker_user_id.eq.${user.id}',
-            )
-            .maybeSingle();
-
-        if (pair == null) {
-          _showMsg("No patient connected");
-          setState(() => _loading = false);
-          return;
+        final userProfile = await ApiService.getUserProfile(user.id);
+        pairId = userProfile['pair_id'];
+        
+        if (pairId == null) {
+           _showMsg("No patient connected");
+           setState(() => _loading = false);
+           return;
         }
-
-        final fetchedPairId = pair['id'] as String;
-        pairId = fetchedPairId;
-        PairContext.set(fetchedPairId);
+        PairContext.set(pairId);
       }
 
-      final pair = await _client
-          .from('pairs')
-          .select('patient_user_id')
-          .eq('id', pairId)
-          .single();
+      final pairInfo = await ApiService.getPairInfo(pairId);
+      final patientUserId = pairInfo['patient_user_id'];
 
-      final patientUserId = pair['patient_user_id'];
+      final patient = await ApiService.getUserProfile(patientUserId);
 
-      if (patientUserId == null) {
-        _showMsg("Patient profile not available");
-        setState(() => _loading = false);
-        return;
+      if (mounted) {
+        setState(() {
+          _patientData = patient;
+          _loading = false;
+        });
       }
-
-      final patient =
-          await _client.from('users').select().eq('id', patientUserId).single();
-
-      setState(() {
-        _patientData = patient;
-        _loading = false;
-      });
     } catch (e) {
-      _showMsg("Failed to load person");
-      setState(() => _loading = false);
+      _showMsg("Failed to load patient data");
+      if (mounted) setState(() => _loading = false);
     }
   }
 

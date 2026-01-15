@@ -1,15 +1,17 @@
-import 'package:cogni_anchor/data/models/user_model.dart';
-import 'package:cogni_anchor/data/services/pair_context.dart';
-import 'package:cogni_anchor/data/services/patient_status_service.dart';
+import 'dart:developer' as developer;
+import 'package:cogni_anchor/data/auth/auth_service.dart';
+import 'package:cogni_anchor/data/auth/user_model.dart';
+import 'package:cogni_anchor/data/notification/fcm_service.dart';
+import 'package:cogni_anchor/presentation/screens/onboarding/onboarding_screen.dart'; 
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:gap/gap.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:cogni_anchor/presentation/constants/theme_constants.dart';
 import 'package:cogni_anchor/presentation/widgets/common/app_text.dart';
 import 'package:cogni_anchor/presentation/screens/auth/signup_page.dart';
-import 'package:cogni_anchor/presentation/screens/user_selection_page.dart';
-import 'package:cogni_anchor/presentation/screens/app_initializer.dart';
+import 'package:cogni_anchor/presentation/main_screen.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:cogni_anchor/logic/bloc/reminder/reminder_bloc.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -25,50 +27,43 @@ class _LoginPageState extends State<LoginPage> {
 
   Future<void> _login() async {
     setState(() => _loading = true);
+    developer.log('Login attempt started for ${_emailController.text}', name: 'LoginPage');
 
     try {
-      final client = Supabase.instance.client;
-
-      await client.auth.signInWithPassword(
-        email: _emailController.text.trim(),
-        password: _passwordController.text.trim(),
+      final userProfile = await AuthService.instance.signIn(
+        _emailController.text.trim(),
+        _passwordController.text.trim(),
       );
 
-      final user = client.auth.currentUser!;
-      final data = await client
-          .from('users')
-          .select('role')
-          .eq('id', user.id)
-          .maybeSingle();
+      developer.log('API login successful, initializing FCM', name: 'LoginPage');
+      await FCMService.instance.initialize();
 
       if (!mounted) return;
 
-      if (data == null || data['role'] == null) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => const UserSelectionPage()),
-        );
-      } else {
-        final role = UserModel.values.firstWhere(
-          (e) => e.name == data['role'],
-        );
+      final role = userProfile.role == 'patient' 
+          ? UserModel.patient 
+          : UserModel.caretaker;
 
-        if (role == UserModel.patient) {
-          await PatientStatusService.markLoggedIn();
-        }
+      final hasSeenOnboarding = await AuthService.instance.hasSeenOnboarding();
+      developer.log('Login complete. Role: $role, HasSeenOnboarding: $hasSeenOnboarding', name: 'LoginPage');
 
-        await loadPairIntoContext(role);
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(
+          builder: (_) => hasSeenOnboarding
+              ? BlocProvider(
+                  create: (_) => ReminderBloc(),
+                  child: MainScreen(userModel: role),
+                )
+              : OnboardingScreen(userModel: role),
+        ),
+        (_) => false,
+      );
 
-        if (!mounted) return;
-        Navigator.pushAndRemoveUntil(
-          context,
-          MaterialPageRoute(builder: (_) => const AppInitializer()),
-          (_) => false,
-        );
-      }
     } catch (e) {
+      developer.log('Login failed: $e', name: 'LoginPage', error: e);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString())),
+        SnackBar(content: Text(e.toString().replaceAll("Exception: ", ""))),
       );
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -119,31 +114,5 @@ class _LoginPageState extends State<LoginPage> {
         ),
       ),
     );
-  }
-
-  Future<void> loadPairIntoContext(UserModel role) async {
-    final client = Supabase.instance.client;
-    final user = client.auth.currentUser;
-    if (user == null) return;
-
-    final query = role == UserModel.patient
-        ? client
-            .from('pairs')
-            .select('id')
-            .eq('patient_user_id', user.id)
-            .maybeSingle()
-        : client
-            .from('pairs')
-            .select('id')
-            .eq('caretaker_user_id', user.id)
-            .maybeSingle();
-
-    final pair = await query;
-
-    if (pair != null && pair['id'] != null) {
-      PairContext.set(pair['id']);
-    } else {
-      PairContext.clear();
-    }
   }
 }

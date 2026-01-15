@@ -1,10 +1,13 @@
 import 'dart:developer';
 import 'package:bloc/bloc.dart';
-import 'package:cogni_anchor/data/models/reminder_model.dart';
-import 'package:cogni_anchor/data/services/notification_service.dart';
-import 'package:cogni_anchor/data/services/reminder_supabase_service.dart';
+import 'package:cogni_anchor/data/core/config/api_config.dart';
+import 'package:cogni_anchor/data/core/pair_context.dart';
+import 'package:cogni_anchor/data/reminder/reminder_api_service.dart';
+import 'package:cogni_anchor/data/reminder/reminder_model.dart';
+
 import 'package:intl/intl.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:web_socket_channel/io.dart';
+import 'package:web_socket_channel/web_socket_channel.dart';
 
 part 'reminder_event.dart';
 part 'reminder_state.dart';
@@ -12,67 +15,88 @@ part 'reminder_state.dart';
 class ReminderBloc extends Bloc<ReminderEvent, ReminderState> {
   static const String _nameTag = 'ReminderBloc';
 
-  final ReminderSupabaseService _supabaseService = ReminderSupabaseService();
-  final SupabaseClient _client = Supabase.instance.client;
+  final ReminderApiService _apiService = ReminderApiService();
+  WebSocketChannel? _wsChannel;
 
   ReminderBloc() : super(ReminderInitial()) {
     on<LoadReminders>(_onLoadReminders);
     on<AddReminder>(_onAddReminder);
     on<DeleteReminder>(_onDeleteReminder);
+    on<InitializeReminderWebSocket>(_onInitWebSocket);
   }
 
-  Future<String?> _getPairId() async {
-    final user = _client.auth.currentUser;
-    if (user == null) return null;
+  String? _getPairId() {
+    return PairContext.pairId;
+  }
 
-    final patient = await _client
-        .from('pairs')
-        .select('id')
-        .eq('patient_user_id', user.id)
-        .maybeSingle();
+  @override
+  Future<void> close() {
+    _wsChannel?.sink.close();
+    return super.close();
+  }
 
-    if (patient != null) return patient['id'].toString();
+  Future<void> _onInitWebSocket(
+    InitializeReminderWebSocket event,
+    Emitter<ReminderState> emit,
+  ) async {
+    final pairId = _getPairId();
+    if (pairId == null) return;
 
-    final caretaker = await _client
-        .from('pairs')
-        .select('id')
-        .eq('caretaker_user_id', user.id)
-        .maybeSingle();
+    if (_wsChannel != null) {
+      await _wsChannel!.sink.close();
+    }
 
-    return caretaker?['id']?.toString();
+    try {
+      String baseUrl = ApiConfig.baseUrl.replaceFirst('http', 'ws');
+      final wsUrl = '$baseUrl/api/v1/reminders/ws/$pairId';
+
+      log("Connecting to Reminder WS: $wsUrl", name: _nameTag);
+      _wsChannel = IOWebSocketChannel.connect(Uri.parse(wsUrl));
+
+      _wsChannel!.stream.listen((message) {
+        log("Reminder WS Event: $message", name: _nameTag);
+        add(LoadReminders());
+      }, onError: (e) {
+        log("Reminder WS Error: $e", name: _nameTag);
+      });
+    } catch (e) {
+      log("Reminder WS Connect Fail: $e", name: _nameTag);
+    }
   }
 
   Future<void> _onLoadReminders(
     LoadReminders event,
     Emitter<ReminderState> emit,
   ) async {
+    if (_wsChannel == null) {
+      add(InitializeReminderWebSocket());
+    }
+
     emit(ReminderLoading());
 
     try {
-      final pairId = await _getPairId();
+      final pairId = _getPairId();
       if (pairId == null) {
-        emit(const ReminderError("No patient connected"));
+        emit(const RemindersLoaded([], null));
         return;
       }
 
-      final reminders = await _supabaseService.getReminders(pairId);
+      final reminders = await _apiService.getReminders(pairId);
+
       final now = DateTime.now();
       final format = DateFormat("dd MMM yyyy hh:mm a");
 
       final List<Reminder> upcoming = [];
-      final List<Reminder> expired = [];
 
       for (final r in reminders) {
-        final dt = format.parse("${r.date} ${r.time}");
-        if (dt.isBefore(now)) {
-          expired.add(r);
-        } else {
-          upcoming.add(r);
+        try {
+          final dt = format.parse("${r.date} ${r.time}");
+          if (dt.isAfter(now)) {
+            upcoming.add(r);
+          }
+        } catch (e) {
+          log("Date parsing error: $e");
         }
-      }
-
-      for (final r in expired) {
-        await _supabaseService.deleteReminder(r.id);
       }
 
       upcoming.sort((a, b) {
@@ -82,9 +106,8 @@ class ReminderBloc extends Bloc<ReminderEvent, ReminderState> {
       });
 
       final next = upcoming.isNotEmpty ? upcoming.first : null;
-      final rest = upcoming.where((r) => r != next).toList();
 
-      emit(RemindersLoaded(rest, next));
+      emit(RemindersLoaded(reminders, next));
     } catch (e, st) {
       log("Load error: $e", name: _nameTag);
       log("Stacktrace: $st", name: _nameTag);
@@ -97,34 +120,25 @@ class ReminderBloc extends Bloc<ReminderEvent, ReminderState> {
     Emitter<ReminderState> emit,
   ) async {
     try {
-      final pairId = await _getPairId();
+      final pairId = _getPairId();
       if (pairId == null) {
         emit(const ReminderError("No patient connected"));
         return;
       }
 
-      final scheduledDate =
-          _parseDate(event.reminder.date, event.reminder.time);
+      // 1. Validate Date
+      final format = DateFormat("dd MMM yyyy hh:mm a");
+      final scheduledDate = format.parse("${event.reminder.date} ${event.reminder.time}");
 
       if (!scheduledDate.isAfter(DateTime.now())) {
         emit(const ReminderError("Cannot set reminder in the past"));
         return;
       }
 
-      await _supabaseService.createReminder(
+      // 2. Send to Backend
+      await _apiService.createReminder(
         reminder: event.reminder,
         pairId: pairId,
-      );
-
-      final delay = scheduledDate.difference(DateTime.now());
-      final notificationId =
-          scheduledDate.millisecondsSinceEpoch.remainder(100000);
-
-      await NotificationService().scheduleAfterDuration(
-        id: notificationId,
-        title: "Reminder",
-        body: event.reminder.title,
-        delay: delay,
       );
 
       add(LoadReminders());
@@ -140,25 +154,12 @@ class ReminderBloc extends Bloc<ReminderEvent, ReminderState> {
     Emitter<ReminderState> emit,
   ) async {
     try {
-      await _supabaseService.deleteReminder(event.reminder.id);
-
-      final notificationId =
-          _parseDate(event.reminder.date, event.reminder.time)
-              .millisecondsSinceEpoch
-              .remainder(100000);
-
-      await NotificationService().cancel(notificationId);
-
+      await _apiService.deleteReminder(event.reminder.id);
       add(LoadReminders());
     } catch (e, st) {
       log("Delete error: $e", name: _nameTag);
       log("Stacktrace: $st", name: _nameTag);
       emit(const ReminderError("Failed to delete reminder"));
     }
-  }
-
-  DateTime _parseDate(String date, String time) {
-    final format = DateFormat("dd MMM yyyy hh:mm a");
-    return format.parse("$date $time");
   }
 }

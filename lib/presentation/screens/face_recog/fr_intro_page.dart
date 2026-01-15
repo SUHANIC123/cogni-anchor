@@ -1,4 +1,4 @@
-import 'package:cogni_anchor/data/services/pair_context.dart';
+import 'package:cogni_anchor/data/core/pair_context.dart';
 import 'package:cogni_anchor/presentation/constants/theme_constants.dart';
 import 'package:cogni_anchor/presentation/screens/face_recog/fr_scan_page.dart';
 import 'package:cogni_anchor/presentation/screens/face_recog/fr_add_person_page.dart';
@@ -11,7 +11,6 @@ import 'package:gap/gap.dart';
 class FacialRecognitionPage extends StatelessWidget {
   const FacialRecognitionPage({super.key});
 
-  /// 🔒 Helper to ensure pair exists
   void _requirePair(BuildContext context, VoidCallback action) {
     if (PairContext.pairId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -29,7 +28,7 @@ class FacialRecognitionPage extends StatelessWidget {
       appBar: AppBar(
         backgroundColor: AppColors.primary,
         elevation: 4,
-        shadowColor: AppColors.primary.withOpacity(0.3),
+        shadowColor: AppColors.primary.withValues(alpha: 0.3),
         automaticallyImplyLeading: false,
         centerTitle: true,
         shape: RoundedRectangleBorder(
@@ -71,7 +70,7 @@ class FacialRecognitionPage extends StatelessWidget {
             _buildActionTile(
               context,
               title: "Manage People",
-              subtitle: "Edit or remove registered faces",
+              subtitle: "Edit details of registered faces",
               icon: Icons.manage_accounts_rounded,
               color: Colors.orangeAccent,
               onTap: () => _requirePair(
@@ -84,7 +83,24 @@ class FacialRecognitionPage extends StatelessWidget {
                 ),
               ),
             ),
-            Gap(100.h), // Space for FAB
+            Gap(16.h),
+            _buildActionTile(
+              context,
+              title: "Remove Person",
+              subtitle: "Delete a person from database",
+              icon: Icons.person_remove_rounded,
+              color: Colors.redAccent,
+              onTap: () => _requirePair(
+                context,
+                () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const FRPeopleListPage(forEditing: false),
+                  ),
+                ),
+              ),
+            ),
+            Gap(100.h),
           ],
         ),
       ),
@@ -96,8 +112,7 @@ class FacialRecognitionPage extends StatelessWidget {
             MaterialPageRoute(builder: (_) => const FRScanPage()),
           ),
         ),
-        label: AppText("Start Scanning",
-            color: Colors.white, fontWeight: FontWeight.w600),
+        label: const AppText("Start Scanning", color: Colors.white, fontWeight: FontWeight.w600),
         icon: const Icon(Icons.center_focus_strong, color: Colors.white),
         backgroundColor: AppColors.primary,
         elevation: 4,
@@ -126,7 +141,7 @@ class FacialRecognitionPage extends StatelessWidget {
         borderRadius: BorderRadius.circular(20.r),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -140,8 +155,7 @@ class FacialRecognitionPage extends StatelessWidget {
               color: AppColors.primaryLight,
               borderRadius: BorderRadius.circular(12.r),
             ),
-            child: Icon(Icons.visibility_outlined,
-                color: AppColors.primary, size: 28.sp),
+            child: Icon(Icons.visibility_outlined, color: AppColors.primary, size: 28.sp),
           ),
           Gap(16.w),
           Expanded(
@@ -186,7 +200,7 @@ class FacialRecognitionPage extends StatelessWidget {
           borderRadius: BorderRadius.circular(16.r),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.05),
+              color: Colors.black.withValues(alpha: 0.05),
               blurRadius: 10,
               offset: const Offset(0, 4),
             ),
@@ -197,7 +211,7 @@ class FacialRecognitionPage extends StatelessWidget {
             Container(
               padding: EdgeInsets.all(10.w),
               decoration: BoxDecoration(
-                color: color.withOpacity(0.1),
+                color: color.withValues(alpha: 0.1),
                 shape: BoxShape.circle,
               ),
               child: Icon(icon, color: color, size: 24.sp),

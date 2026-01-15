@@ -1,9 +1,9 @@
 import 'dart:async';
 import 'dart:io';
-import 'package:cogni_anchor/data/services/api_service.dart';
-import 'package:cogni_anchor/data/services/camera_store.dart';
-import 'package:cogni_anchor/data/services/embedding_service.dart';
-import 'package:cogni_anchor/data/services/face_crop_service.dart';
+import 'package:cogni_anchor/data/chatbot/embedding_service.dart';
+import 'package:cogni_anchor/data/core/api_service.dart';
+import 'package:cogni_anchor/data/face_recog/camera_store.dart';
+import 'package:cogni_anchor/data/face_recog/face_crop_service.dart';
 import 'package:cogni_anchor/presentation/constants/theme_constants.dart';
 import 'package:cogni_anchor/presentation/screens/face_recog/fr_result_found_page.dart';
 import 'package:cogni_anchor/presentation/screens/face_recog/fr_result_not_found_page.dart';
@@ -185,7 +185,7 @@ class _FRScanPageState extends State<FRScanPage> {
                   ),
                   child: Column(
                     children: [
-                      Icon(Icons.camera, color: AppColors.primary),
+                      const Icon(Icons.camera, color: AppColors.primary),
                       Gap(5.h),
                       AppText("Scanning face...", fontSize: 12.sp, color: AppColors.primary),
                     ],

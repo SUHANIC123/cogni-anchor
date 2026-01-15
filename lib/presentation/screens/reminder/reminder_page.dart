@@ -1,11 +1,11 @@
-import 'package:cogni_anchor/data/models/reminder_model.dart';
-import 'package:cogni_anchor/data/models/user_model.dart';
+import 'package:cogni_anchor/data/auth/user_model.dart';
+import 'package:cogni_anchor/data/reminder/reminder_model.dart';
 import 'package:cogni_anchor/logic/bloc/reminder/reminder_bloc.dart';
 import 'package:cogni_anchor/presentation/constants/theme_constants.dart';
 import 'package:cogni_anchor/presentation/screens/reminder/add_reminder_page.dart';
 import 'package:cogni_anchor/presentation/widgets/common/app_text.dart';
-import 'package:cogni_anchor/presentation/widgets/reminder_page/reminder_child_card_widget.dart';
-import 'package:cogni_anchor/presentation/widgets/reminder_page/reminder_main_card_widget.dart';
+import 'package:cogni_anchor/presentation/widgets/reminder/reminder_child_card_widget.dart';
+import 'package:cogni_anchor/presentation/widgets/reminder/reminder_main_card_widget.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
@@ -36,8 +36,6 @@ class _ReminderPageState extends State<ReminderPage> {
         action: SnackBarAction(
           label: "Undo",
           onPressed: () {
-            // Optional: Implement Undo logic in Bloc if needed
-            // For now, re-adding it or just refreshing could work if backed by API
             context.read<ReminderBloc>().add(AddReminder(reminder));
           },
         ),
@@ -48,8 +46,8 @@ class _ReminderPageState extends State<ReminderPage> {
   Widget? _buildFloatingActionButton() {
     if (widget.userModel == UserModel.caretaker) {
       return FloatingActionButton.extended(
-        onPressed: () {
-          Navigator.push(
+        onPressed: () async {
+          await Navigator.push(
             context,
             MaterialPageRoute(
               builder: (context) => BlocProvider.value(
@@ -58,11 +56,14 @@ class _ReminderPageState extends State<ReminderPage> {
               ),
             ),
           );
+
+          if (mounted) {
+            context.read<ReminderBloc>().add(LoadReminders());
+          }
         },
         backgroundColor: AppColors.primary,
         icon: const Icon(Icons.add_alarm, color: Colors.white),
-        label: const Text("New Reminder",
-            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+        label: const Text("New Reminder", style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
       );
     }
     return null;
@@ -75,21 +76,19 @@ class _ReminderPageState extends State<ReminderPage> {
       appBar: AppBar(
         backgroundColor: AppColors.primary,
         elevation: 4,
-        shadowColor: AppColors.primary.withOpacity(0.3),
+        shadowColor: AppColors.primary.withValues(alpha: 0.3),
         automaticallyImplyLeading: false,
         centerTitle: true,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(bottom: Radius.circular(24.r)),
         ),
-        title: AppText("Reminders",
-            fontSize: 18.sp, color: Colors.white, fontWeight: FontWeight.w600),
+        title: AppText("Reminders", fontSize: 18.sp, color: Colors.white, fontWeight: FontWeight.w600),
       ),
       floatingActionButton: _buildFloatingActionButton(),
       body: BlocConsumer<ReminderBloc, ReminderState>(
         listener: (context, state) {
           if (state is ReminderError) {
-            ScaffoldMessenger.of(context)
-                .showSnackBar(SnackBar(content: Text(state.message)));
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(state.message)));
           }
         },
         builder: (context, state) {
@@ -114,11 +113,9 @@ class _ReminderPageState extends State<ReminderPage> {
                 physics: const BouncingScrollPhysics(),
                 slivers: [
                   SliverPadding(
-                    padding: EdgeInsets.fromLTRB(
-                        20.w, 24.h, 20.w, 100.h), // Bottom padding for FAB
+                    padding: EdgeInsets.fromLTRB(20.w, 24.h, 20.w, 100.h),
                     sliver: SliverList(
                       delegate: SliverChildListDelegate([
-                        // 1. Upcoming Section
                         if (upcoming != null) ...[
                           _sectionHeader("Next Up"),
                           Gap(12.h),
@@ -129,13 +126,10 @@ class _ReminderPageState extends State<ReminderPage> {
                           ),
                           Gap(24.h),
                         ],
-
-                        // 2. All Reminders Section
                         if (reminders.isNotEmpty) ...[
                           _sectionHeader("All Reminders"),
                           Gap(12.h),
-                          ...reminders.map(
-                              (reminder) => _buildDismissibleItem(reminder)),
+                          ...reminders.map((reminder) => _buildDismissibleItem(reminder)),
                         ],
                       ]),
                     ),
@@ -163,19 +157,16 @@ class _ReminderPageState extends State<ReminderPage> {
   }
 
   Widget _buildDismissibleItem(Reminder reminder) {
-    // Only Caretakers should be able to delete, or both?
-    // Assuming both can for now, or check widget.userModel
     final canDelete = widget.userModel == UserModel.caretaker;
 
     final card = ReminderChildCardWidget(
       title: reminder.title,
       date: reminder.date,
       time: reminder.time,
-      color: Colors.blueGrey, // Distinct from "Upcoming" orange
+      color: Colors.blueGrey,
     );
 
-    if (!canDelete)
-      return Padding(padding: EdgeInsets.only(bottom: 12.h), child: card);
+    if (!canDelete) return Padding(padding: EdgeInsets.only(bottom: 12.h), child: card);
 
     return Padding(
       padding: EdgeInsets.only(bottom: 12.h),
@@ -189,8 +180,7 @@ class _ReminderPageState extends State<ReminderPage> {
           ),
           alignment: Alignment.centerRight,
           padding: EdgeInsets.only(right: 20.w),
-          child:
-              const Icon(Icons.delete_outline, color: Colors.white, size: 28),
+          child: const Icon(Icons.delete_outline, color: Colors.white, size: 28),
         ),
         onDismissed: (_) => _deleteReminder(reminder),
         child: card,
@@ -206,15 +196,13 @@ class _ReminderPageState extends State<ReminderPage> {
           Container(
             padding: EdgeInsets.all(30.w),
             decoration: BoxDecoration(
-              color: AppColors.primary.withOpacity(0.1),
+              color: AppColors.primary.withValues(alpha: 0.1),
               shape: BoxShape.circle,
             ),
-            child: Icon(Icons.alarm_off_rounded,
-                size: 60.sp, color: AppColors.primary),
+            child: Icon(Icons.alarm_off_rounded, size: 60.sp, color: AppColors.primary),
           ),
           Gap(20.h),
-          AppText("No reminders yet",
-              fontSize: 18.sp, fontWeight: FontWeight.w600),
+          AppText("No reminders yet", fontSize: 18.sp, fontWeight: FontWeight.w600),
           Gap(8.h),
           AppText(
             "You're all caught up!\nAdd a new reminder to get started.",
