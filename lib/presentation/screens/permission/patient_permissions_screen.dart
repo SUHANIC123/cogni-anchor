@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:cogni_anchor/data/auth/auth_service.dart';
 import 'package:cogni_anchor/data/core/api_service.dart';
 import 'package:cogni_anchor/data/core/background_service.dart';
+import 'package:cogni_anchor/data/notification/fcm_service.dart';
 import 'package:cogni_anchor/presentation/constants/theme_constants.dart';
 import 'package:cogni_anchor/presentation/widgets/common/app_text.dart';
 import 'package:flutter/material.dart';
@@ -26,7 +27,7 @@ class _PatientPermissionsScreenState extends State<PatientPermissionsScreen> {
   bool? _prevLocationState;
   bool? _prevMicState;
 
-  Timer? _syncTimer;
+  StreamSubscription? _statusSub;
   bool _isLoading = true;
 
   @override
@@ -35,14 +36,15 @@ class _PatientPermissionsScreenState extends State<PatientPermissionsScreen> {
     _checkDevicePermissions();
     _fetchBackendStatus();
 
-    _syncTimer = Timer.periodic(const Duration(seconds: 3), (timer) {
+    // Replaced polling with Stream listener from FCM Service
+    _statusSub = FCMService.instance.onStatusUpdate.listen((_) {
       _fetchBackendStatus(silent: true);
     });
   }
 
   @override
   void dispose() {
-    _syncTimer?.cancel();
+    _statusSub?.cancel();
     super.dispose();
   }
 
@@ -77,6 +79,7 @@ class _PatientPermissionsScreenState extends State<PatientPermissionsScreen> {
           });
         }
 
+        // Sync Background Service state based on backend response
         if (_prevLocationState != remoteLoc) {
           await BackgroundService.instance.setLocationEnabled(remoteLoc);
           if (remoteLoc) await BackgroundService.instance.start();
@@ -178,9 +181,9 @@ class _PatientPermissionsScreenState extends State<PatientPermissionsScreen> {
                       color: Colors.red.shade700,
                     ),
                   ),
-                  const TextButton(
+                  TextButton(
                     onPressed: openAppSettings,
-                    child: Text("Settings"),
+                    child: const Text("Settings"),
                   )
                 ],
               ),

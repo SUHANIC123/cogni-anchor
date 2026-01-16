@@ -18,7 +18,7 @@ class NotificationService {
     tz.initializeTimeZones();
 
     const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
-    
+
     const iosSettings = DarwinInitializationSettings(
       requestAlertPermission: true,
       requestBadgePermission: true,
@@ -26,21 +26,20 @@ class NotificationService {
     );
 
     const settings = InitializationSettings(android: androidSettings, iOS: iosSettings);
-    
+
     await _plugin.initialize(
       settings,
       onDidReceiveNotificationResponse: (details) {
-        debugPrint("🔔 Notification Clicked: ${details.payload}");
+        debugPrint(" Notification Clicked: ${details.payload}");
       },
     );
 
-    final androidImplementation = _plugin.resolvePlatformSpecificImplementation<
-        AndroidFlutterLocalNotificationsPlugin>();
-    
+    final androidImplementation = _plugin.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+
     if (androidImplementation != null) {
       await androidImplementation.createNotificationChannel(
         const AndroidNotificationChannel(
-          _channelId, 
+          _channelId,
           _channelName,
           description: _channelDesc,
           importance: Importance.max,
@@ -57,7 +56,7 @@ class NotificationService {
         try {
           await androidImplementation.requestExactAlarmsPermission();
         } catch (e) {
-          debugPrint("⚠️ Exact alarms permission request failed: $e");
+          debugPrint("️ Exact alarms permission request failed: $e");
         }
       }
     }
@@ -73,7 +72,7 @@ class NotificationService {
 
     const notificationDetails = NotificationDetails(
       android: AndroidNotificationDetails(
-        _channelId,  
+        _channelId,
         _channelName,
         channelDescription: _channelDesc,
         importance: Importance.max,
@@ -92,12 +91,12 @@ class NotificationService {
     );
 
     if (scheduledTime.isBefore(now.add(const Duration(seconds: 5)))) {
-      debugPrint("🔔 Showing immediate notification for: $title");
+      debugPrint(" Showing immediate notification for: $title");
       await _plugin.show(id, title, body, notificationDetails);
       return;
     }
 
-    debugPrint("⏰ Scheduling notification for: $scheduledTime");
+    debugPrint(" Scheduling notification for: $scheduledTime");
     await _plugin.zonedSchedule(
       id,
       title,

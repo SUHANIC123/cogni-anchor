@@ -58,10 +58,20 @@ class _MainScreenState extends State<MainScreen> {
   }
 
   Future<void> _checkAndStartService() async {
-    final locStatus = await Permission.locationAlways.status;
+    // Check for general location permission (WhileInUse or Always)
+    // Previously it was only checking locationAlways, which might fail if user only granted 'While In Use'
+    final locStatus = await Permission.location.status;
     final micStatus = await Permission.microphone.status;
 
-    if (locStatus.isGranted || micStatus.isGranted) {
+    if (locStatus.isGranted) {
+      // REQUIREMENT: Connect to websocket (enable location tracking) on start if permission is on.
+      // We must explicitly set the enabled flag to true so the BackgroundService internal logic
+      // initiates the WebSocket connection.
+      await BackgroundService.instance.setLocationEnabled(true);
+      await BackgroundService.instance.start();
+    } 
+    else if (micStatus.isGranted) {
+      // If only mic is granted, we still start the service infrastructure
       await BackgroundService.instance.start();
     }
   }

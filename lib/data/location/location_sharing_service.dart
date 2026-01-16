@@ -15,10 +15,12 @@ class LocationSharingService {
     required String userId,
     required String baseUrl,
   }) {
-    if (_positionSub != null) return; 
+    if (_positionSub != null) return;
 
-    print("📍 Starting Location Stream...");
-    final wsUrl = '$baseUrl/ws/location/$pairId/patient';
+    print("Starting Location Stream...");
+
+    // FIX: Added /api/v1/location prefix to match backend main.py
+    final wsUrl = '$baseUrl/api/v1/location/ws/location/$pairId/patient';
 
     try {
       _channel = IOWebSocketChannel.connect(Uri.parse(wsUrl));
@@ -26,7 +28,7 @@ class LocationSharingService {
       _positionSub = Geolocator.getPositionStream(
         locationSettings: const LocationSettings(
           accuracy: LocationAccuracy.high,
-          distanceFilter: 10, 
+          distanceFilter: 10,
         ),
       ).listen((Position position) {
         final data = jsonEncode({
@@ -34,7 +36,7 @@ class LocationSharingService {
           'longitude': position.longitude,
           'user_id': userId,
         });
-        
+
         try {
           _channel?.sink.add(data);
         } catch (e) {

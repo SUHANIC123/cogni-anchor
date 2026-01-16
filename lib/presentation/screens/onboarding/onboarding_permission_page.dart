@@ -8,7 +8,13 @@ import 'package:permission_handler/permission_handler.dart';
 
 class OnboardingPermissionPage extends StatefulWidget {
   final UserModel userModel;
-  const OnboardingPermissionPage({super.key, required this.userModel});
+  final Function(bool) onPermissionsChanged; // Callback to notify parent
+
+  const OnboardingPermissionPage({
+    super.key, 
+    required this.userModel, 
+    required this.onPermissionsChanged,
+  });
 
   @override
   State<OnboardingPermissionPage> createState() => _OnboardingPermissionPageState();
@@ -53,6 +59,17 @@ class _OnboardingPermissionPageState extends State<OnboardingPermissionPage> wit
         _micGranted = mic.isGranted;
         _cameraGranted = cam.isGranted;
       });
+
+      // MANDATORY CHECK: Validate if all required permissions are granted
+      bool isAllGranted;
+      if (widget.userModel == UserModel.patient) {
+        isAllGranted = _notificationGranted && _locationGranted && _micGranted && _cameraGranted;
+      } else {
+        // Caretakers don't strictly need the microphone for monitoring
+        isAllGranted = _notificationGranted && _locationGranted && _cameraGranted;
+      }
+      
+      widget.onPermissionsChanged(isAllGranted);
     }
   }
 
@@ -91,10 +108,11 @@ class _OnboardingPermissionPageState extends State<OnboardingPermissionPage> wit
           ),
           Gap(12.h),
           AppText(
-            "To provide the best care and safety features, we need access to the following:",
+            "MANDATORY: To provide the best care and safety features, you must allow all the following permissions to continue:",
             fontSize: 14.sp,
-            color: Colors.grey.shade600,
+            color: Colors.red.shade700,
             textAlign: TextAlign.center,
+            fontWeight: FontWeight.w500,
           ),
           Gap(30.h),
 

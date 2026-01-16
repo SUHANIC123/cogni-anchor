@@ -21,7 +21,9 @@ class _MicSharingScreenState extends State<MicSharingScreen> with SingleTickerPr
 
   WebSocketChannel? _channel;
   final PlayerStream _player = PlayerStream();
+  
   bool _isConnected = false;
+  bool _isReceivingAudio = false;
   String _statusText = "Connecting...";
 
   @override
@@ -45,7 +47,7 @@ class _MicSharingScreenState extends State<MicSharingScreen> with SingleTickerPr
   Future<void> _initAudioStream() async {
     final pairId = PairContext.pairId;
     if (pairId == null) {
-      setState(() => _statusText = "Error: No Pair ID");
+      if (mounted) setState(() => _statusText = "Error: No Pair ID");
       return;
     }
 
@@ -53,30 +55,54 @@ class _MicSharingScreenState extends State<MicSharingScreen> with SingleTickerPr
       await _player.initialize();
 
       String baseUrl = ApiConfig.baseUrl.replaceFirst('http', 'ws');
-      final url = '$baseUrl/ws/audio/$pairId/caretaker';
+      final url = '$baseUrl/api/v1/audio/ws/audio/$pairId/caretaker';
 
+      debugPrint("Connecting to Audio WS: $url");
       _channel = IOWebSocketChannel.connect(Uri.parse(url));
+
+      if (mounted) {
+        setState(() {
+          _isConnected = true;
+          _statusText = "Requesting Audio...";
+        });
+      }
 
       _sendCommandWithRetry("START_MIC");
 
       _channel!.stream.listen((data) {
+        // FIX: Handle both Audio (List<int>) and Errors (String)
         if (data is List<int>) {
-          if (!_isConnected) {
-            setState(() {
-              _isConnected = true;
-              _statusText = "Listening to Patient...";
-            });
+          if (!_isReceivingAudio) {
+            if (mounted) {
+              setState(() {
+                _isReceivingAudio = true;
+                _statusText = "Listening to Patient...";
+              });
+            }
           }
           _player.writeChunk(Uint8List.fromList(data));
+        } else if (data is String) {
+          debugPrint("Received Text: $data");
+          if (data.contains("ERROR")) {
+             if (mounted) {
+               setState(() {
+                 _statusText = "Patient Device Error: Mic Failed";
+                 _isReceivingAudio = false;
+                 _isConnected = false;
+               });
+             }
+          }
         }
       }, onError: (e) {
-        setState(() => _statusText = "Connection Error");
+        if (mounted) setState(() => _statusText = "Connection Error");
         debugPrint("Audio Error: $e");
+      }, onDone: () {
+        if (mounted) setState(() => _statusText = "Connection Closed");
       });
 
       await _player.start();
     } catch (e) {
-      setState(() => _statusText = "Failed to connect");
+      if (mounted) setState(() => _statusText = "Failed to connect");
       debugPrint("Connection failed: $e");
     }
   }
@@ -84,7 +110,9 @@ class _MicSharingScreenState extends State<MicSharingScreen> with SingleTickerPr
   Future<void> _sendCommandWithRetry(String cmd) async {
     for (int i = 0; i < 3; i++) {
       if (_channel != null) {
-        _channel!.sink.add(cmd);
+        try {
+          _channel!.sink.add(cmd);
+        } catch (_) {}
       }
       await Future.delayed(const Duration(seconds: 1));
     }
@@ -101,6 +129,12 @@ class _MicSharingScreenState extends State<MicSharingScreen> with SingleTickerPr
 
   @override
   Widget build(BuildContext context) {
+    Color statusColor = (_isConnected && _isReceivingAudio) 
+        ? const Color(0xFFFF653A) 
+        : (_statusText.contains("Error") || _statusText.contains("Failed")) 
+            ? Colors.red 
+            : Colors.grey;
+
     return Scaffold(
       backgroundColor: const Color(0xFFF6F6F6),
       body: SafeArea(
@@ -142,7 +176,7 @@ class _MicSharingScreenState extends State<MicSharingScreen> with SingleTickerPr
               animation: _pulse,
               builder: (_, child) {
                 return Transform.scale(
-                  scale: _isConnected ? _pulse.value : 1.0,
+                  scale: (_isConnected && _isReceivingAudio) ? _pulse.value : 1.0,
                   child: child,
                 );
               },
@@ -151,7 +185,7 @@ class _MicSharingScreenState extends State<MicSharingScreen> with SingleTickerPr
                 height: 180,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: _isConnected ? const Color(0xFFFF653A).withValues(alpha: 0.15) : Colors.grey.withValues(alpha: 0.1),
+                  color: statusColor.withValues(alpha: 0.15),
                 ),
                 child: Center(
                   child: Container(
@@ -159,10 +193,10 @@ class _MicSharingScreenState extends State<MicSharingScreen> with SingleTickerPr
                     height: 120,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: _isConnected ? const Color(0xFFFF653A) : Colors.grey,
+                      color: statusColor,
                     ),
-                    child: const Icon(
-                      Icons.mic,
+                    child: Icon(
+                      (_statusText.contains("Error")) ? Icons.error_outline : Icons.mic,
                       color: Colors.white,
                       size: 56,
                     ),
@@ -173,11 +207,21 @@ class _MicSharingScreenState extends State<MicSharingScreen> with SingleTickerPr
             const SizedBox(height: 24),
             Text(
               _statusText,
-              style: const TextStyle(
+              textAlign: TextAlign.center,
+              style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w600,
+                color: statusColor,
               ),
             ),
+            if (_isConnected && !_isReceivingAudio && !_statusText.contains("Error"))
+              Padding(
+                padding: const EdgeInsets.only(top: 8.0),
+                child: Text(
+                  "Waiting for patient device...",
+                  style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
+                ),
+              ),
             const Spacer(),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24),

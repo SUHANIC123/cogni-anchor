@@ -10,8 +10,7 @@ class ApiService {
 
   // ===== USER PROFILE ENDPOINTS =====
   static Future<Map<String, dynamic>> getUserProfile(String userId) async {
-    // Matches @router.get("/users/{user_id}") in backend users_pairs.py
-    final uri = Uri.parse("${ApiConfig.baseUrl}/api/v1/users/users/$userId");
+    final uri = Uri.parse("${ApiConfig.baseUrl}/api/v1/users/$userId");
     final response = await http.get(uri);
 
     if (response.statusCode == 200) {
@@ -21,7 +20,7 @@ class ApiService {
   }
 
   static Future<void> updateUserProfile(String userId, Map<String, dynamic> data) async {
-    final uri = Uri.parse("${ApiConfig.baseUrl}/api/v1/users/users/$userId");
+    final uri = Uri.parse("${ApiConfig.baseUrl}/api/v1/users/$userId");
     final response = await http.put(
       uri,
       headers: {'Content-Type': 'application/json'},
@@ -34,7 +33,7 @@ class ApiService {
   }
 
   static Future<void> changePassword(String userId, String currentPass, String newPass) async {
-    final uri = Uri.parse("${ApiConfig.baseUrl}/api/v1/users/users/$userId/password");
+    final uri = Uri.parse("${ApiConfig.baseUrl}/api/v1/users/$userId/password");
     final response = await http.put(
       uri,
       headers: {'Content-Type': 'application/json'},
@@ -52,9 +51,7 @@ class ApiService {
 
   // ===== PAIR ENDPOINTS =====
 
-  // FIX: Added missing getPairInfo method
   static Future<Map<String, dynamic>> getPairInfo(String pairId) async {
-    // Matches @router.get("/pairs/{pair_id}") in backend users_pairs.py
     final uri = Uri.parse("${ApiConfig.baseUrl}/api/v1/pairs/$pairId");
     final response = await http.get(uri);
 
@@ -65,7 +62,6 @@ class ApiService {
   }
 
   // ===== FACE RECOGNITION ENDPOINTS =====
-  // Matches prefix="/api/v1/face" in face_recognition.py
   static Future<List<dynamic>> getPeople() async {
     final uri = Uri.parse("${ApiConfig.baseUrl}/api/v1/face/getPeople?pair_id=$_pairId");
     final res = await http.get(uri);
@@ -162,15 +158,17 @@ class ApiService {
   }
 
   // ===== PATIENT STATUS ENDPOINTS =====
-  // Matches prefix="/api/v1/patient" in patient_features.py
+
   static Future<void> updatePatientStatus({
     bool? locationToggle,
     bool? micToggle,
     bool? locationPermission,
     bool? micPermission,
     bool? isLoggedIn,
+    String? targetUserId,
   }) async {
-    final userId = AuthService.instance.currentUser?.id;
+    // FIX: Use targetUserId if provided, otherwise default to logged-in user
+    final userId = targetUserId ?? AuthService.instance.currentUser?.id;
     if (userId == null) return;
 
     final uri = Uri.parse("${ApiConfig.baseUrl}/api/v1/patient/status?user_id=$userId");
@@ -206,7 +204,7 @@ class ApiService {
   static Future<void> updateFCMToken(String token) async {
     final userId = AuthService.instance.currentUser?.id;
     if (userId == null) return;
-    final uri = Uri.parse("${ApiConfig.baseUrl}/api/v1/users/users/fcm-token?user_id=$userId");
+    final uri = Uri.parse("${ApiConfig.baseUrl}/api/v1/users/fcm-token?user_id=$userId");
     try {
       await http.put(
         uri,

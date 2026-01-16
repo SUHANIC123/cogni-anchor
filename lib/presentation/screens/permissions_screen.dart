@@ -22,6 +22,9 @@ class _PermissionsScreenState extends State<PermissionsScreen> {
   bool _loadingLocation = false;
   bool _loadingMic = false;
   bool _isLoadingStatus = true;
+  
+  // FIX: Store the patient's User ID
+  String? _patientUserId;
 
   @override
   void initState() {
@@ -44,6 +47,7 @@ class _PermissionsScreenState extends State<PermissionsScreen> {
 
       if (mounted) {
         setState(() {
+          _patientUserId = patientId; 
           locationEnabled = status['location_toggle_on'] ?? false;
           microphoneEnabled = status['mic_toggle_on'] ?? false;
           _isLoadingStatus = false;
@@ -56,11 +60,15 @@ class _PermissionsScreenState extends State<PermissionsScreen> {
   }
 
   Future<void> _toggleLocation(bool value) async {
-    if (_loadingLocation) return;
+    if (_loadingLocation || _patientUserId == null) return;
     setState(() => _loadingLocation = true);
 
     try {
-      await ApiService.updatePatientStatus(locationToggle: value);
+      // FIX: Pass targetUserId to update the patient
+      await ApiService.updatePatientStatus(
+        locationToggle: value, 
+        targetUserId: _patientUserId
+      );
       setState(() => locationEnabled = value);
     } catch (e) {
       _showMsg("Action failed: ${e.toString()}");
@@ -70,11 +78,15 @@ class _PermissionsScreenState extends State<PermissionsScreen> {
   }
 
   Future<void> _toggleMic(bool value) async {
-    if (_loadingMic) return;
+    if (_loadingMic || _patientUserId == null) return;
     setState(() => _loadingMic = true);
 
     try {
-      await ApiService.updatePatientStatus(micToggle: value);
+      // FIX: Pass targetUserId to update the patient
+      await ApiService.updatePatientStatus(
+        micToggle: value,
+        targetUserId: _patientUserId
+      );
       setState(() => microphoneEnabled = value);
     } catch (e) {
       _showMsg("Action failed: ${e.toString()}");

@@ -34,7 +34,9 @@ class _CaregiverLiveMapScreenState extends State<CaregiverLiveMapScreen> {
     if (pairId == null) return;
 
     String baseUrl = ApiConfig.baseUrl.replaceFirst('http', 'ws');
-    final url = '$baseUrl/ws/location/$pairId/caretaker';
+
+    // FIX: Added /api/v1/location prefix to match backend main.py
+    final url = '$baseUrl/api/v1/location/ws/location/$pairId/caretaker';
 
     try {
       _channel = IOWebSocketChannel.connect(Uri.parse(url));

@@ -3,7 +3,9 @@ import 'package:cogni_anchor/data/auth/user_model.dart';
 import 'package:cogni_anchor/logic/bloc/reminder/reminder_bloc.dart';
 import 'package:cogni_anchor/presentation/constants/theme_constants.dart';
 import 'package:cogni_anchor/presentation/main_screen.dart';
-import 'package:cogni_anchor/presentation/screens/onboarding/onboarding_permission_page.dart'; // ✅ Added Import
+import 'package:cogni_anchor/presentation/screens/onboarding/onboarding_permission_page.dart';
+import 'package:cogni_anchor/presentation/screens/onboarding/patient_setup_page.dart';
+import 'package:cogni_anchor/presentation/screens/settings/terms_conditions_screen.dart';
 import 'package:cogni_anchor/presentation/widgets/common/app_text.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -22,13 +24,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   final PageController _pageController = PageController();
   int _currentIndex = 0;
   late List<OnboardingContent> _contents;
+  bool _allPermissionsGranted = false;
 
-  @override
-  void initState() {
-    super.initState();
-    _contents = widget.userModel == UserModel.patient ? _patientContent : _caretakerContent;
-  }
+  bool get _isPatient => widget.userModel == UserModel.patient;
 
+  // Added missing content lists to resolve undefined identifier errors
   final List<OnboardingContent> _patientContent = [
     OnboardingContent(
       title: "Your AI Companion",
@@ -83,11 +83,15 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     ),
   ];
 
+  @override
+  void initState() {
+    super.initState();
+    _contents = _isPatient ? _patientContent : _caretakerContent;
+  }
+
   Future<void> _finishOnboarding() async {
     await AuthService.instance.completeOnboarding();
-
     if (!mounted) return;
-
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(
@@ -99,9 +103,30 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     );
   }
 
+  void _onNextPressed() {
+    final int permissionPageIndex = _contents.length;
+    final int termsPageIndex = _contents.length + 1;
+
+    if (_currentIndex == permissionPageIndex) {
+      if (!_allPermissionsGranted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Please grant all permissions to continue")),
+        );
+        return;
+      }
+      _pageController.nextPage(duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
+    } else if (_currentIndex == termsPageIndex) {
+      // Logic handled by the "Accept" button inside TermsConditionsScreen
+    } else {
+      _pageController.nextPage(duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final int totalPages = _contents.length + 1;
+    // Total pages = Content Slides + Permission Page + Terms Page
+    final int totalViewPages = _contents.length + 2;
+    final bool isTermsPage = _currentIndex == totalViewPages - 1;
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -111,66 +136,70 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             Expanded(
               child: PageView.builder(
                 controller: _pageController,
-                itemCount: totalPages,
+                itemCount: totalViewPages,
+                physics: const BouncingScrollPhysics(),
                 onPageChanged: (index) => setState(() => _currentIndex = index),
                 itemBuilder: (context, index) {
-                  if (index == _contents.length) {
-                    return OnboardingPermissionPage(userModel: widget.userModel);
+                  if (index < _contents.length) {
+                    return _buildPage(_contents[index]);
+                  } else if (index == _contents.length) {
+                    return OnboardingPermissionPage(
+                      userModel: widget.userModel,
+                      onPermissionsChanged: (granted) => setState(() => _allPermissionsGranted = granted),
+                    );
+                  } else {
+                    return TermsConditionsScreen(
+                      showHeader: false, // Don't show header inside onboarding
+                      onAccept: () {
+                        if (_isPatient) {
+                          Navigator.push(context, MaterialPageRoute(builder: (_) => const PatientSetupPage()));
+                        } else {
+                          _finishOnboarding();
+                        }
+                      },
+                    );
                   }
-                  return _buildPage(_contents[index]);
                 },
               ),
             ),
-
-            Padding(
-              padding: EdgeInsets.symmetric(horizontal: 24.w, vertical: 30.h),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Row(
-                    children: List.generate(
-                      totalPages,
-                      (index) => AnimatedContainer(
-                        duration: const Duration(milliseconds: 300),
-                        margin: EdgeInsets.only(right: 6.w),
-                        height: 8.h,
-                        width: _currentIndex == index ? 24.w : 8.w,
-                        decoration: BoxDecoration(
-                          color: _currentIndex == index ? AppColors.primary : Colors.grey.shade300,
-                          borderRadius: BorderRadius.circular(4.r),
-                        ),
-                      ),
-                    ),
-                  ),
-
-                  ElevatedButton(
-                    onPressed: () {
-                      if (_currentIndex == totalPages - 1) {
-                        _finishOnboarding();
-                      } else {
-                        _pageController.nextPage(
-                          duration: const Duration(milliseconds: 300),
-                          curve: Curves.easeInOut,
-                        );
-                      }
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primary,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12.r),
-                      ),
-                      padding: EdgeInsets.symmetric(horizontal: 24.w, vertical: 12.h),
-                    ),
-                    child: Text(
-                      _currentIndex == totalPages - 1 ? "Get Started" : "Next",
-                      style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.w600, color: Colors.white),
-                    ),
-                  ),
-                ],
-              ),
-            ),
+            if (!isTermsPage) _buildBottomControls(totalViewPages),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildBottomControls(int totalPages) {
+    return Padding(
+      padding: EdgeInsets.symmetric(horizontal: 24.w, vertical: 30.h),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Row(
+            children: List.generate(
+              totalPages,
+              (index) => AnimatedContainer(
+                duration: const Duration(milliseconds: 300),
+                margin: EdgeInsets.only(right: 6.w),
+                height: 8.h,
+                width: _currentIndex == index ? 24.w : 8.w,
+                decoration: BoxDecoration(
+                  color: _currentIndex == index ? AppColors.primary : Colors.grey.shade300,
+                  borderRadius: BorderRadius.circular(4.r),
+                ),
+              ),
+            ),
+          ),
+          ElevatedButton(
+            onPressed: _onNextPressed,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
+              padding: EdgeInsets.symmetric(horizontal: 24.w, vertical: 12.h),
+            ),
+            child: Text("Next", style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.w600, color: Colors.white)),
+          ),
+        ],
       ),
     );
   }
@@ -183,32 +212,20 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         children: [
           Container(
             padding: EdgeInsets.all(40.w),
-            decoration: BoxDecoration(
-              color: content.color.withValues(alpha: 0.1),
-              shape: BoxShape.circle,
-            ),
+            decoration: BoxDecoration(color: content.color.withValues(alpha: 0.1), shape: BoxShape.circle),
             child: Icon(content.icon, size: 100.sp, color: content.color),
           ),
           Gap(40.h),
-          AppText(
-            content.title,
-            fontSize: 24.sp,
-            fontWeight: FontWeight.bold,
-            textAlign: TextAlign.center,
-          ),
+          AppText(content.title, fontSize: 24.sp, fontWeight: FontWeight.bold, textAlign: TextAlign.center),
           Gap(16.h),
-          AppText(
-            content.description,
-            fontSize: 15.sp,
-            color: Colors.grey.shade600,
-            textAlign: TextAlign.center,
-          ),
+          AppText(content.description, fontSize: 15.sp, color: Colors.grey.shade600, textAlign: TextAlign.center),
         ],
       ),
     );
   }
 }
 
+// Added missing class definition to resolve undefined class error
 class OnboardingContent {
   final String title;
   final String description;

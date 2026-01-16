@@ -118,7 +118,7 @@ class _ChatbotPageState extends State<ChatbotPage> {
     }
 
     String baseUrl = ApiConfig.baseUrl.replaceFirst('http', 'ws');
-    
+
     // FIX: Using /api/v1/agent/... to match backend router prefix for agent.py
     final wsUrl = '$baseUrl/api/v1/agent/ws/$patientId/$_pairId';
 
@@ -297,7 +297,7 @@ class _ChatbotPageState extends State<ChatbotPage> {
   Future<void> _sendVoiceMessage(String audioPath) async {
     dev.log("Sending voice message from: $audioPath", name: _nameTag);
     setState(() {
-      _messages.add(ChatMessage(text: "🔊 Voice message sent...", isBot: false, timestamp: DateTime.now()));
+      _messages.add(ChatMessage(text: " Voice message sent...", isBot: false, timestamp: DateTime.now()));
       _isLoading = true;
     });
     _scrollToBottom();
@@ -318,7 +318,7 @@ class _ChatbotPageState extends State<ChatbotPage> {
 
       setState(() {
         _messages[_messages.length - 1] = ChatMessage(
-          text: "🎤 ${response['transcription']}",
+          text: " ${response['transcription']}",
           isBot: false,
           timestamp: DateTime.now(),
         );

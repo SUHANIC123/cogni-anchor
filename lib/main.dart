@@ -10,6 +10,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:cogni_anchor/presentation/screens/app_initializer.dart';
+import 'package:sound_stream/sound_stream.dart'; // Added import
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -22,6 +23,15 @@ Future<void> main() async {
   
   await BackgroundService.instance.initialize();
   developer.log('Background Service initialized', name: 'Main');
+
+  // FIX: Pre-initialize the recorder here to cache the AudioManager reference
+  try {
+    final recorder = RecorderStream();
+    await recorder.initialize();
+    developer.log('Recorder pre-initialized in main thread', name: 'Main');
+  } catch (e) {
+    developer.log('Recorder pre-init warning: $e', name: 'Main');
+  }
 
   runApp(const CogniAnchor());
 }

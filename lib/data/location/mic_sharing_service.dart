@@ -10,8 +10,7 @@ class MicSharingService {
   IOWebSocketChannel? _channel;
   final RecorderStream _recorder = RecorderStream();
   StreamSubscription<List<int>>? _audioSub;
-  
-  bool _isAudioInitialized = false;
+
   bool _isMicActive = false;
 
   void startListeningForCommands({
@@ -21,8 +20,8 @@ class MicSharingService {
   }) {
     if (_channel != null && _channel!.closeCode == null) return;
 
-    print("🎙️ Audio Service Standing By...");
-    final wsUrl = '$baseUrl/ws/audio/$pairId/patient';
+    print("Audio Service Standing By...");
+    final wsUrl = '$baseUrl/api/v1/audio/ws/audio/$pairId/patient';
 
     try {
       _channel = IOWebSocketChannel.connect(Uri.parse(wsUrl));
@@ -43,21 +42,14 @@ class MicSharingService {
 
   Future<void> _startMicStreaming(ServiceInstance service) async {
     if (_isMicActive) return;
-    print("🎙️ Caretaker requested Mic. Starting...");
+    print("️ Caretaker requested Mic. Starting...");
 
-    if (!_isAudioInitialized) {
-      try {
-        await _recorder.initialize();
-        _isAudioInitialized = true;
-      } catch (e) {
-        print("❌ Audio Init Failed: $e");
-        return;
-      }
-    }
+    // FIX: We no longer call recorder.initialize() here because it 
+    // was pre-initialized in the main thread to avoid context errors.
 
     try {
       _isMicActive = true;
-      
+
       if (service is AndroidServiceInstance) {
         service.setForegroundNotificationInfo(
           title: "CogniAnchor",
@@ -71,18 +63,20 @@ class MicSharingService {
           _channel!.sink.add(data);
         }
       });
-      
+
       await _recorder.start();
     } catch (e) {
       print("Error starting recorder: $e");
+      // FIX: Notify caretaker side that the mic failed to start
+      _channel?.sink.add("ERROR_MIC_START");
       _isMicActive = false;
     }
   }
 
   Future<void> _stopMicStreaming(ServiceInstance service) async {
     if (!_isMicActive) return;
-    print("🎙️ Stopping Mic Streaming...");
-    
+    print("️ Stopping Mic Streaming...");
+
     _isMicActive = false;
     try {
       await _recorder.stop();
@@ -102,9 +96,9 @@ class MicSharingService {
   void dispose() {
     _isMicActive = false;
     _audioSub?.cancel();
-    _recorder.stop(); // Safe to call even if stopped
+    try { _recorder.stop(); } catch (_) {}
     _channel?.sink.close();
     _channel = null;
-    print("🛑 Audio Service Disposed");
+    print(" Audio Service Disposed");
   }
 }
