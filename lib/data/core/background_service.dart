@@ -101,7 +101,7 @@ void onStart(ServiceInstance service) async {
   // 1. Initial Config Load
   final prefs = await SharedPreferences.getInstance();
   final pairId = prefs.getString('bg_pair_id');
-  String baseUrl = prefs.getString('bg_api_url') ?? "https://72f5703a5e6f.ngrok-free.app";
+  String baseUrl = prefs.getString('bg_api_url') ?? "https://cogni-anchor.olildu.dpdns.org";
   String wsBaseUrl = baseUrl.replaceFirst('http', 'ws');
 
   final userIdStr = prefs.getString('user_session');

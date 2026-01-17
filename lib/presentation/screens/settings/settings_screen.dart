@@ -23,6 +23,7 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   String? pairId;
+  bool _isConnecting = false;
 
   @override
   void initState() {
@@ -91,9 +92,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Widget _caretakerSection() {
-    return pairId == null 
-      ? _tile(Icons.group_outlined, "Connect to Patient", _showPairIdDialog)
-      : _caretakerPairIdBox();
+    return pairId == null ? _tile(Icons.group_outlined, "Connect to Patient", _showPairIdDialog) : _caretakerPairIdBox();
   }
 
   Widget _tile(IconData icon, String title, VoidCallback onTap) {
@@ -121,15 +120,113 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   BoxDecoration _boxDecoration() => BoxDecoration(
-    color: Colors.white,
-    borderRadius: BorderRadius.circular(16.r),
-    boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))],
-  );
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16.r),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))],
+      );
 
   void _go(Widget page) => Navigator.push(context, MaterialPageRoute(builder: (_) => page));
 
-  // Placeholder for existing dialog logic
-  void _showPairIdDialog() {}
-  Widget _patientPairIdBox() => const SizedBox();
-  Widget _caretakerPairIdBox() => const SizedBox();
+  void _showPairIdDialog() {
+    final controller = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20.r)),
+        title: AppText("Connect to Patient", fontWeight: FontWeight.bold, fontSize: 18.sp),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            AppText("Enter the pair code shown on the patient's device.", fontSize: 13.sp, color: Colors.grey),
+            Gap(16.h),
+            TextField(
+              controller: controller,
+              decoration: InputDecoration(
+                hintText: "Enter Pair Code",
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12.r)),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
+          ElevatedButton(
+            onPressed: () async {
+              final code = controller.text.trim();
+              if (code.isEmpty) return;
+
+              final caretakerId = AuthService.instance.currentUser?.id;
+              if (caretakerId == null) return;
+
+              try {
+                await AuthService.instance.connectPatient(code, caretakerId);
+                if (mounted) {
+                  setState(() => pairId = code);
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Connected successfully!")));
+                }
+              } catch (e) {
+                if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+              }
+            },
+            child: const Text("Connect"),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _patientPairIdBox() {
+    return Container(
+      margin: EdgeInsets.only(bottom: 12.h),
+      padding: EdgeInsets.all(16.w),
+      decoration: _boxDecoration(),
+      child: Row(
+        children: [
+          const Icon(Icons.vpn_key_outlined, color: AppColors.primary),
+          Gap(16.w),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                AppText("Your Pair Code", fontSize: 12.sp, color: Colors.grey),
+                AppText(pairId!, fontSize: 16.sp, fontWeight: FontWeight.bold),
+              ],
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.copy, size: 20, color: AppColors.primary),
+            onPressed: () {
+              Clipboard.setData(ClipboardData(text: pairId!));
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Code copied")));
+            },
+          )
+        ],
+      ),
+    );
+  }
+
+  Widget _caretakerPairIdBox() {
+    return Container(
+      margin: EdgeInsets.only(bottom: 12.h),
+      padding: EdgeInsets.all(16.w),
+      decoration: _boxDecoration(),
+      child: Row(
+        children: [
+          const Icon(Icons.link, color: AppColors.success),
+          Gap(16.w),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                AppText("Linked to Patient", fontSize: 12.sp, color: Colors.grey),
+                AppText("Pair ID: $pairId", fontSize: 14.sp, fontWeight: FontWeight.bold),
+              ],
+            ),
+          ),
+          const Icon(Icons.check_circle, color: AppColors.success),
+        ],
+      ),
+    );
+  }
 }
