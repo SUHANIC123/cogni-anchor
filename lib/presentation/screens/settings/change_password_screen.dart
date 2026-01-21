@@ -1,5 +1,3 @@
-import 'package:cogni_anchor/data/auth/auth_service.dart';
-import 'package:cogni_anchor/data/core/api_service.dart';
 import 'package:cogni_anchor/presentation/constants/theme_constants.dart';
 import 'package:cogni_anchor/presentation/widgets/common/app_text.dart';
 import 'package:flutter/material.dart';

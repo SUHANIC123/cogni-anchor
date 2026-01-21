@@ -23,7 +23,6 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   String? pairId;
-  bool _isConnecting = false;
 
   @override
   void initState() {
@@ -122,7 +121,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   BoxDecoration _boxDecoration() => BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16.r),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))],
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, 4))],
       );
 
   void _go(Widget page) => Navigator.push(context, MaterialPageRoute(builder: (_) => page));

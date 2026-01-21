@@ -1,4 +1,4 @@
-package com.example.cogni_anchor
+package com.olildu.cogni_anchor
 
 import io.flutter.embedding.android.FlutterActivity
 

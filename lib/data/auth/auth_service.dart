@@ -55,7 +55,6 @@ class AuthService {
   }
 
   Future<UserProfile> signIn(String email, String password) async {
-    // FIX: Using backend router structure from users_pairs.py
     final uri = Uri.parse('${ApiConfig.baseUrl}/api/v1/users/login');
     developer.log('Signing in user: $email', name: 'AuthService');
 
@@ -98,7 +97,6 @@ class AuthService {
     required String password,
     required String role,
   }) async {
-    // FIX: Using backend router structure from users_pairs.py
     final uri = Uri.parse('${ApiConfig.baseUrl}/api/v1/users/signup');
     developer.log('Signing up user: $email with role $role', name: 'AuthService');
 
@@ -139,8 +137,6 @@ class AuthService {
   Future<void> connectPatient(String pairCode, String caretakerId) async {
     developer.log('Connecting patient with pairCode: $pairCode', name: 'AuthService');
     
-    // FIX: Changed from /api/v1/users/pairs/connect to /api/v1/pairs/connect
-    // This matches the router prefix defined in app/api/v1/users/users_pairs.py
     final uri = Uri.parse('${ApiConfig.baseUrl}/api/v1/pairs/connect');
     
     final response = await http.post(

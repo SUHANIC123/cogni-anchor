@@ -1,3 +1,18 @@
+import java.util.Properties
+import java.io.File
+
+// --------------------
+// Load keystore properties
+// --------------------
+val keystoreProperties = Properties()
+val keystorePropertiesFile = rootProject.file("key.properties")
+
+if (keystorePropertiesFile.exists()) {
+    keystoreProperties.load(keystorePropertiesFile.inputStream())
+} else {
+    throw GradleException("key.properties not found at android/key.properties")
+}
+
 plugins {
     id("com.android.application")
     // START: FlutterFire Configuration
@@ -9,7 +24,7 @@ plugins {
 }
 
 android {
-    namespace = "com.example.cogni_anchor"
+    namespace = "com.olildu.cogni_anchor"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -17,7 +32,7 @@ android {
         // REQUIRED for desugaring in Kotlin DSL
         isCoreLibraryDesugaringEnabled = true
 
-        // Flutter now expects Java 17
+        // Flutter requires Java 17
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
@@ -26,8 +41,24 @@ android {
         jvmTarget = JavaVersion.VERSION_17.toString()
     }
 
+    // --------------------
+    // Signing configuration (RELEASE)
+    // --------------------
+    signingConfigs {
+        create("release") {
+            storeFile = file(
+                requireNotNull(keystoreProperties["storeFile"]) {
+                    "storeFile missing in key.properties"
+                }
+            )
+            storePassword = keystoreProperties["storePassword"] as String
+            keyAlias = keystoreProperties["keyAlias"] as String
+            keyPassword = keystoreProperties["keyPassword"] as String
+        }
+    }
+
     defaultConfig {
-        applicationId = "com.example.cogni_anchor"
+        applicationId = "com.olildu.cogni_anchor"
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
@@ -35,15 +66,22 @@ android {
     }
 
     buildTypes {
-        release {
-            signingConfig = signingConfigs.getByName("debug")
+        getByName("release") {
+            signingConfig = signingConfigs.getByName("release")
+
+            // Optional for internal apps
+            isMinifyEnabled = false
+            isShrinkResources = false
+        }
+
+        getByName("debug") {
+            // Uses default debug keystore
         }
     }
 }
 
 dependencies {
-    // Kotlin DSL syntax (FIXED)
-coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
 }
 
 flutter {

@@ -7,9 +7,9 @@
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:523758033958:android:1808a36e56448bcd84dae7",
+        "mobilesdk_app_id": "1:523758033958:android:e0ccc859fec62a5d84dae7",
         "android_client_info": {
-          "package_name": "com.example.cogni_anchor"
+          "package_name": "com.olildu.cogni_anchor"
         }
       },
       "oauth_client": [],

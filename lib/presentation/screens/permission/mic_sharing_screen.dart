@@ -21,7 +21,7 @@ class _MicSharingScreenState extends State<MicSharingScreen> with SingleTickerPr
 
   WebSocketChannel? _channel;
   final PlayerStream _player = PlayerStream();
-  
+
   bool _isConnected = false;
   bool _isReceivingAudio = false;
   String _statusText = "Connecting...";
@@ -70,7 +70,6 @@ class _MicSharingScreenState extends State<MicSharingScreen> with SingleTickerPr
       _sendCommandWithRetry("START_MIC");
 
       _channel!.stream.listen((data) {
-        // FIX: Handle both Audio (List<int>) and Errors (String)
         if (data is List<int>) {
           if (!_isReceivingAudio) {
             if (mounted) {
@@ -84,13 +83,13 @@ class _MicSharingScreenState extends State<MicSharingScreen> with SingleTickerPr
         } else if (data is String) {
           debugPrint("Received Text: $data");
           if (data.contains("ERROR")) {
-             if (mounted) {
-               setState(() {
-                 _statusText = "Patient Device Error: Mic Failed";
-                 _isReceivingAudio = false;
-                 _isConnected = false;
-               });
-             }
+            if (mounted) {
+              setState(() {
+                _statusText = "Patient Device Error: Mic Failed";
+                _isReceivingAudio = false;
+                _isConnected = false;
+              });
+            }
           }
         }
       }, onError: (e) {
@@ -129,10 +128,10 @@ class _MicSharingScreenState extends State<MicSharingScreen> with SingleTickerPr
 
   @override
   Widget build(BuildContext context) {
-    Color statusColor = (_isConnected && _isReceivingAudio) 
-        ? const Color(0xFFFF653A) 
-        : (_statusText.contains("Error") || _statusText.contains("Failed")) 
-            ? Colors.red 
+    Color statusColor = (_isConnected && _isReceivingAudio)
+        ? const Color(0xFFFF653A)
+        : (_statusText.contains("Error") || _statusText.contains("Failed"))
+            ? Colors.red
             : Colors.grey;
 
     return Scaffold(

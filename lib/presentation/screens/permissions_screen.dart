@@ -23,7 +23,6 @@ class _PermissionsScreenState extends State<PermissionsScreen> {
   bool _loadingMic = false;
   bool _isLoadingStatus = true;
   
-  // FIX: Store the patient's User ID
   String? _patientUserId;
 
   @override
@@ -64,7 +63,6 @@ class _PermissionsScreenState extends State<PermissionsScreen> {
     setState(() => _loadingLocation = true);
 
     try {
-      // FIX: Pass targetUserId to update the patient
       await ApiService.updatePatientStatus(
         locationToggle: value, 
         targetUserId: _patientUserId
@@ -82,7 +80,6 @@ class _PermissionsScreenState extends State<PermissionsScreen> {
     setState(() => _loadingMic = true);
 
     try {
-      // FIX: Pass targetUserId to update the patient
       await ApiService.updatePatientStatus(
         micToggle: value,
         targetUserId: _patientUserId

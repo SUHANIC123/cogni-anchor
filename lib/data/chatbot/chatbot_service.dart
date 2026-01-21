@@ -21,7 +21,7 @@ class ChatbotService {
               'message': message,
             }),
           )
-          .timeout(const Duration(seconds: 30));
+          .timeout(const Duration(seconds: 60));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -52,7 +52,7 @@ class ChatbotService {
         ),
       );
 
-      final streamedResponse = await request.send().timeout(const Duration(seconds: 60));
+      final streamedResponse = await request.send().timeout(const Duration(seconds: 300));
       final response = await http.Response.fromStream(streamedResponse);
 
       if (response.statusCode == 200) {

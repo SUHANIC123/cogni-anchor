@@ -167,7 +167,6 @@ class ApiService {
     bool? isLoggedIn,
     String? targetUserId,
   }) async {
-    // FIX: Use targetUserId if provided, otherwise default to logged-in user
     final userId = targetUserId ?? AuthService.instance.currentUser?.id;
     if (userId == null) return;
 

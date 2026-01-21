@@ -19,7 +19,6 @@ class LocationSharingService {
 
     print("Starting Location Stream...");
 
-    // FIX: Added /api/v1/location prefix to match backend main.py
     final wsUrl = '$baseUrl/api/v1/location/ws/location/$pairId/patient';
 
     try {

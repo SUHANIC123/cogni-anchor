@@ -1,14 +1,11 @@
-import 'package:cogni_anchor/data/auth/auth_service.dart';
 import 'package:cogni_anchor/data/auth/user_model.dart';
-import 'package:cogni_anchor/logic/bloc/reminder/reminder_bloc.dart';
 import 'package:cogni_anchor/presentation/constants/theme_constants.dart';
-import 'package:cogni_anchor/presentation/main_screen.dart';
+import 'package:cogni_anchor/presentation/screens/onboarding/caretaker_setup_page.dart';
 import 'package:cogni_anchor/presentation/screens/onboarding/onboarding_permission_page.dart';
 import 'package:cogni_anchor/presentation/screens/onboarding/patient_setup_page.dart';
 import 'package:cogni_anchor/presentation/screens/settings/terms_conditions_screen.dart';
 import 'package:cogni_anchor/presentation/widgets/common/app_text.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:gap/gap.dart';
 
@@ -89,20 +86,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     _contents = _isPatient ? _patientContent : _caretakerContent;
   }
 
-  Future<void> _finishOnboarding() async {
-    await AuthService.instance.completeOnboarding();
-    if (!mounted) return;
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(
-        builder: (_) => BlocProvider(
-          create: (_) => ReminderBloc(),
-          child: MainScreen(userModel: widget.userModel),
-        ),
-      ),
-    );
-  }
-
   void _onNextPressed() {
     final int permissionPageIndex = _contents.length;
     final int termsPageIndex = _contents.length + 1;
@@ -149,12 +132,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     );
                   } else {
                     return TermsConditionsScreen(
-                      showHeader: false, // Don't show header inside onboarding
+                      showHeader: false,
                       onAccept: () {
                         if (_isPatient) {
                           Navigator.push(context, MaterialPageRoute(builder: (_) => const PatientSetupPage()));
                         } else {
-                          _finishOnboarding();
+                          Navigator.push(context, MaterialPageRoute(builder: (_) => const CaretakerSetupPage()));
                         }
                       },
                     );

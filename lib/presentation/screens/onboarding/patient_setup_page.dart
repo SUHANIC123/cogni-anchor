@@ -1,3 +1,5 @@
+// lib/presentation/screens/onboarding/patient_setup_page.dart
+
 import 'package:cogni_anchor/data/auth/auth_service.dart';
 import 'package:cogni_anchor/data/auth/user_model.dart';
 import 'package:cogni_anchor/logic/bloc/reminder/reminder_bloc.dart';
@@ -9,6 +11,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:gap/gap.dart';
+import 'package:qr_flutter/qr_flutter.dart'; // Ensure qr_flutter is in pubspec.yaml
 
 class PatientSetupPage extends StatefulWidget {
   const PatientSetupPage({super.key});
@@ -28,8 +31,6 @@ class _PatientSetupPageState extends State<PatientSetupPage> {
   }
 
   Future<void> _loadPairId() async {
-    // The Pair ID is usually assigned during Signup for patients.
-    // We retrieve it from the local session.
     final user = AuthService.instance.currentUser;
     setState(() {
       _pairId = user?.pairId;
@@ -39,7 +40,6 @@ class _PatientSetupPageState extends State<PatientSetupPage> {
 
   Future<void> _finishSetup() async {
     await AuthService.instance.completeOnboarding();
-
     if (!mounted) return;
 
     Navigator.pushReplacement(
@@ -72,7 +72,7 @@ class _PatientSetupPageState extends State<PatientSetupPage> {
                 ),
                 child: Icon(Icons.phonelink_ring_rounded, size: 60.sp, color: AppColors.primary),
               ),
-              Gap(30.h),
+              Gap(20.h),
               AppText(
                 "Connect Caretaker",
                 fontSize: 22.sp,
@@ -81,7 +81,7 @@ class _PatientSetupPageState extends State<PatientSetupPage> {
               ),
               Gap(12.h),
               AppText(
-                "Share this code with your caretaker so they can connect to your account.",
+                "Show this QR code or share the manual code with your caretaker to connect your accounts.",
                 fontSize: 14.sp,
                 color: Colors.grey.shade600,
                 textAlign: TextAlign.center,
@@ -90,9 +90,21 @@ class _PatientSetupPageState extends State<PatientSetupPage> {
               if (_isLoading)
                 const CircularProgressIndicator()
               else if (_pairId == null)
-                const AppText("Error: No Pair ID found. Please try logging in again.", color: Colors.red)
-              else
+                const AppText("Error: No Pair ID found. Please login again.", color: Colors.red)
+              else ...[
+                // QR Code Display
+                Center(
+                  child: QrImageView(
+                    data: _pairId!,
+                    version: QrVersions.auto,
+                    size: 200.w,
+                    gapless: false,
+                    foregroundColor: AppColors.primary,
+                  ),
+                ),
+                Gap(24.h),
                 _buildCodeBox(),
+              ],
               const Spacer(),
               SizedBox(
                 width: double.infinity,
@@ -139,9 +151,7 @@ class _PatientSetupPageState extends State<PatientSetupPage> {
         TextButton.icon(
           onPressed: () {
             Clipboard.setData(ClipboardData(text: _pairId!));
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text("Code copied to clipboard")),
-            );
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Code copied")));
           },
           icon: const Icon(Icons.copy, color: AppColors.primary),
           label: const AppText("Copy Code", color: AppColors.primary, fontWeight: FontWeight.w600),

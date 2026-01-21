@@ -44,9 +44,6 @@ class MicSharingService {
     if (_isMicActive) return;
     print("️ Caretaker requested Mic. Starting...");
 
-    // FIX: We no longer call recorder.initialize() here because it 
-    // was pre-initialized in the main thread to avoid context errors.
-
     try {
       _isMicActive = true;
 
@@ -67,7 +64,6 @@ class MicSharingService {
       await _recorder.start();
     } catch (e) {
       print("Error starting recorder: $e");
-      // FIX: Notify caretaker side that the mic failed to start
       _channel?.sink.add("ERROR_MIC_START");
       _isMicActive = false;
     }

@@ -119,7 +119,6 @@ class _ChatbotPageState extends State<ChatbotPage> {
 
     String baseUrl = ApiConfig.baseUrl.replaceFirst('http', 'ws');
 
-    // FIX: Using /api/v1/agent/... to match backend router prefix for agent.py
     final wsUrl = '$baseUrl/api/v1/agent/ws/$patientId/$_pairId';
 
     dev.log("Attempting WS Connection to: $wsUrl", name: _nameTag);
@@ -223,6 +222,14 @@ class _ChatbotPageState extends State<ChatbotPage> {
         _isLoading = false;
       });
       _scrollToBottom();
+    }
+  }
+
+  Future<void> _toggleRecording() async {
+    if (_isRecording) {
+      await _stopRecording();
+    } else {
+      await _startRecording();
     }
   }
 
@@ -491,15 +498,20 @@ class _ChatbotPageState extends State<ChatbotPage> {
           ),
           Gap(12.w),
           GestureDetector(
-            onTapDown: (_) => _startRecording(),
-            onTapUp: (_) => _stopRecording(),
-            onTapCancel: () {
-              setState(() => _isRecording = false);
-            },
-            child: CircleAvatar(
-              radius: 24.r,
-              backgroundColor: _isRecording ? Colors.redAccent : AppColors.surface,
-              child: Icon(Icons.mic, color: _isRecording ? Colors.white : AppColors.primary),
+            onTap: _toggleRecording,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              padding: EdgeInsets.all(12.w),
+              decoration: BoxDecoration(
+                color: _isRecording ? Colors.redAccent : AppColors.surface,
+                shape: BoxShape.circle,
+                boxShadow: _isRecording ? [BoxShadow(color: Colors.redAccent.withValues(alpha: 0.4), blurRadius: 10, spreadRadius: 2)] : [],
+              ),
+              child: Icon(
+                _isRecording ? Icons.stop_rounded : Icons.mic_rounded,
+                color: _isRecording ? Colors.white : AppColors.primary,
+                size: 24.sp,
+              ),
             ),
           ),
           Gap(8.w),

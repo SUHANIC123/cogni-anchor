@@ -29,7 +29,6 @@ class _AppInitializerState extends State<AppInitializer> {
 
   Future<void> _initializeServices() async {
     try {
-      // FIX: pass requestPermission: false to stop immediate system popups on startup
       await NotificationService().init(requestPermission: false);
       developer.log('Local notifications initialized (silent mode)', name: 'AppInitializer');
 
